@@ -98,6 +98,12 @@ variable "apim_sku_name" {
   default     = "Developer_1"
 }
 
+variable "customer_jwt_signing_key" {
+  description = "Signing key used by the customer JWT issuer and APIM validation policy."
+  type        = string
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Additional tags applied to managed Azure resources."
   type        = map(string)

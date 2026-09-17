@@ -11,10 +11,10 @@
                       failed-validation-error-message="Unauthorized: a valid customer access token is required."
                       output-token-variable-name="customer-jwt">
           <issuers>
-            <issuer>CatCarAuthServer</issuer>
+            <issuer>CatCar</issuer>
           </issuers>
           <audiences>
-            <audience>CatCarApi</audience>
+            <audience>CatCar.Api</audience>
           </audiences>
           <issuer-signing-keys>
             <key>{{catcar-jwt-signing-key}}</key>
@@ -30,7 +30,7 @@
                            renewal-period="60"
                            counter-key="@(((Jwt)context.Variables[&quot;customer-jwt&quot;]).Claims[&quot;sub&quot;][0])" />
         <choose>
-          <when condition="@(context.Request.Url.Path.StartsWith(&quot;/api/customers/&quot;, StringComparison.OrdinalIgnoreCase) &amp;&amp; !string.Equals(context.Request.Url.Path.Split('/')[3], ((Jwt)context.Variables[&quot;customer-jwt&quot;]).Claims[&quot;customer_id&quot;][0], StringComparison.OrdinalIgnoreCase))">
+          <when condition="@(context.Request.Url.Path.StartsWith(&quot;/api/v1/service-operations/customers/&quot;, StringComparison.OrdinalIgnoreCase) &amp;&amp; !string.Equals(context.Request.Url.Path.Split('/')[5], ((Jwt)context.Variables[&quot;customer-jwt&quot;]).Claims[&quot;customer_id&quot;][0], StringComparison.OrdinalIgnoreCase))">
             <return-response>
               <set-status code="403" reason="Forbidden" />
               <set-header name="Content-Type" exists-action="override">
@@ -39,7 +39,7 @@
               <set-body>{"type":"https://www.rfc-editor.org/rfc/rfc7807#section-3.1","title":"Customer identity mismatch","status":403}</set-body>
             </return-response>
           </when>
-          <when condition="@(context.Request.Method == &quot;GET&quot; &amp;&amp; context.Request.Url.Path.StartsWith(&quot;/api/work-orders/&quot;, StringComparison.OrdinalIgnoreCase) &amp;&amp; context.Request.Url.Path.EndsWith(&quot;/progress&quot;, StringComparison.OrdinalIgnoreCase))">
+          <when condition="@(context.Request.Method == &quot;GET&quot; &amp;&amp; context.Request.Url.Path.StartsWith(&quot;/api/v1/service-operations/work-orders/&quot;, StringComparison.OrdinalIgnoreCase) &amp;&amp; context.Request.Url.Path.EndsWith(&quot;/progress&quot;, StringComparison.OrdinalIgnoreCase))">
             <!-- The work-order ID is not a customer ID. Forward the validated identity so the backend can enforce ownership. -->
             <set-header name="X-Customer-Id" exists-action="override">
               <value>@(((Jwt)context.Variables[&quot;customer-jwt&quot;]).Claims[&quot;customer_id&quot;][0])</value>
@@ -51,6 +51,7 @@
   </inbound>
   <backend>
     <base />
+    <set-backend-service backend-id="catcar-api-aks" />
   </backend>
   <outbound>
     <base />

@@ -1,6 +1,8 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  backend "azurerm" {}
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -182,7 +184,7 @@ resource "azurerm_api_management" "this" {
   publisher_name       = var.apim_publisher_name
   publisher_email      = var.apim_publisher_email
   sku_name             = var.apim_sku_name
-  virtual_network_type = "Internal"
+  virtual_network_type = "External"
   tags                 = local.tags
 
   virtual_network_configuration {
@@ -192,4 +194,39 @@ resource "azurerm_api_management" "this" {
   identity {
     type = "SystemAssigned"
   }
+}
+ 
+resource "azurerm_api_management_named_value" "customer_jwt_signing_key" {
+  name                = "catcar-jwt-signing-key"
+  display_name        = "catcar-jwt-signing-key"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  value               = var.customer_jwt_signing_key
+  secret              = true
+}
+
+resource "azurerm_api_management_api" "catcar" {
+  name                = "catcar-api"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  revision            = "1"
+  display_name        = "CatCar API"
+  path                = "api"
+  service_url          = "http://catcar-api.catcar.svc.cluster.local:8080"
+  protocols           = ["https", "http"]
+}
+
+resource "azurerm_api_management_backend" "catcar" {
+  name                = "catcar-api-aks"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  protocol            = "http"
+  url                 = "http://catcar-api.catcar.svc.cluster.local:8080"
+}
+
+resource "azurerm_api_management_api_policy" "catcar" {
+  api_name            = azurerm_api_management_api.catcar.name
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  xml_content         = file("${path.module}/../apim-policy.xml")
 }
