@@ -28,6 +28,11 @@ output "acr_id" {
   value       = azurerm_container_registry.this.id
 }
 
+output "acr_name" {
+  description = "Azure Container Registry name."
+  value       = azurerm_container_registry.this.name
+}
+
 output "acr_login_server" {
   description = "Azure Container Registry login server."
   value       = azurerm_container_registry.this.login_server
@@ -52,4 +57,14 @@ output "application_insights_connection_string" {
 output "log_analytics_workspace_id" {
   description = "Log Analytics workspace resource ID for diagnostics and alerts."
   value       = azurerm_log_analytics_workspace.this.id
+}
+
+output "log_analytics_workspace_name" {
+  description = "Log Analytics workspace name."
+  value       = azurerm_log_analytics_workspace.this.name
+}
+
+output "application_insights_name" {
+  description = "Application Insights resource name."
+  value       = azurerm_application_insights.this.name
 }

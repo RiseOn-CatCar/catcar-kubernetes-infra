@@ -58,6 +58,12 @@ variable "aks_max_node_count" {
   default     = 6
 }
 
+variable "private_endpoints_subnet_prefix" {
+  description = "Subnet used by private endpoints for foundation services."
+  type        = string
+  default     = "10.20.4.0/24"
+}
+
 variable "availability_zones" {
   description = "Availability zones assigned to the AKS system pool."
   type        = list(string)
