@@ -102,6 +102,23 @@ variable "customer_jwt_signing_key" {
   description = "Signing key used by the customer JWT issuer and APIM validation policy."
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.customer_jwt_signing_key) >= 32
+    error_message = "customer_jwt_signing_key must contain at least 32 characters."
+  }
+}
+
+variable "api_backend_url" {
+  description = "APIM-reachable internal load balancer URL for the CatCar API."
+  type        = string
+  default     = "http://catcar-api.catcar.internal"
+}
+
+variable "auth_function_backend_url" {
+  description = "Private URL for the customer authentication function backend."
+  type        = string
+  default     = "https://auth-function.internal.catcar.local"
 }
 
 variable "tags" {

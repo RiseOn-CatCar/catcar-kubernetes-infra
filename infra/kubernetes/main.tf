@@ -212,8 +212,8 @@ resource "azurerm_api_management_api" "catcar" {
   revision            = "1"
   display_name        = "CatCar API"
   path                = "api"
-  service_url          = "http://catcar-api.catcar.svc.cluster.local:8080"
-  protocols           = ["https", "http"]
+  service_url = var.api_backend_url
+  protocols   = ["https"]
 }
 
 resource "azurerm_api_management_backend" "catcar" {
@@ -221,7 +221,86 @@ resource "azurerm_api_management_backend" "catcar" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   protocol            = "http"
-  url                 = "http://catcar-api.catcar.svc.cluster.local:8080"
+  url                 = var.api_backend_url
+}
+
+resource "azurerm_api_management_backend" "auth_function" {
+  name                = "catcar-auth-function"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  protocol            = "https"
+  url                 = var.auth_function_backend_url
+}
+
+locals {
+  api_operations = {
+    customer_auth_post = { method = "POST", url_template = "auth/customer", display_name = "Customer authentication" }
+    customer_auth_options = { method = "OPTIONS", url_template = "auth/customer", display_name = "Customer authentication CORS preflight" }
+    login_post = { method = "POST", url_template = "v1/identity-access/auth/login", display_name = "Identity login" }
+    progress_get = { method = "GET", url_template = "v1/service-operations/work-orders/{id}/progress", display_name = "Work order progress" }
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar" {
+  for_each            = local.api_operations
+  operation_id        = each.key
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = each.value.display_name
+  method              = each.value.method
+  url_template        = each.value.url_template
+  dynamic "template_parameter" {
+    for_each = each.key == "progress_get" ? [1] : []
+    content {
+      name     = "id"
+      required = true
+      type     = "string"
+    }
+  }
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_get_catch_all" {
+  operation_id        = "get-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "GET catch all"
+  method              = "GET"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_post_catch_all" {
+  operation_id        = "post-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "POST catch all"
+  method              = "POST"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
 }
 
 resource "azurerm_api_management_api_policy" "catcar" {
@@ -229,4 +308,5 @@ resource "azurerm_api_management_api_policy" "catcar" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   xml_content         = file("${path.module}/../apim-policy.xml")
+  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
 }
