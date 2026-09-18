@@ -1,0 +1,70 @@
+{
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# CatCar Operations Dashboard\nOperational health and work-order flow telemetry from Application Insights."
+      },
+      "name": "header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Daily Work Order Volume",
+        "query": "requests\n| where name contains 'work-orders' or url contains '/work-orders'\n| summarize WorkOrders = count() by Day = bin(timestamp, 1d)\n| order by Day asc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart",
+        "chartSettings": {
+          "ySettings": {
+            "showLegend": true,
+            "showYAxis": true
+          }
+        }
+      },
+      "name": "daily-work-order-volume"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Average Execution Time per Status",
+        "query": "requests\n| where name contains 'work-orders' or url contains '/work-orders'\n| summarize AverageLatencyMs = round(avg(duration), 2) by Operation = name\n| order by AverageLatencyMs desc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      },
+      "name": "average-execution-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Integration Error Rates",
+        "query": "requests\n| where name contains 'work-orders' or url contains '/work-orders'\n| summarize Total = count(), Failed = countif(success == false or resultCode startswith '5') by bin(timestamp, 1h)\n| extend ErrorRatePercent = iff(Total == 0, 0.0, round(100.0 * Failed / Total, 2))\n| order by timestamp asc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 604800000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "integration-error-rates"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.insights/components/appi-catcar-prod"
+  ]
+}
