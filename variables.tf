@@ -43,7 +43,7 @@ variable "apim_subnet_prefix" {
 variable "aks_vm_size" {
   description = "VM size for the AKS system node pool."
   type        = string
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D2ads_v6"
 }
 
 variable "aks_min_node_count" {
