@@ -9,7 +9,7 @@ readonly OIDC_ISSUER="https://token.actions.githubusercontent.com"
 readonly OIDC_AUDIENCE="api://AzureADTokenExchange"
 
 # Target repositories across the organization
-DEFAULT_REPOSITORIES=("catcar-app" "catcar-auth-function" "catcar-database-infra" "catcar-kubernetes-infra")
+DEFAULT_REPOSITORIES=("catcar-app" "catcar-auth-function" "catcar-database-infra" "catcar-kubernetes-infra" "catcar-platform")
 
 mode="dry-run"
 target_environment="all"
@@ -123,6 +123,7 @@ save_env_file() {
     local target_file="${1:-.env}"
     if [[ -f "$target_file" ]]; then
         printf 'Ensuring %s contains all effective configuration and secrets...\n' "$target_file"
+        chmod 600 "$target_file"
     else
         printf 'Creating %s (mode 0600) with configuration and generated secrets...\n' "$target_file"
         touch "$target_file"
@@ -157,7 +158,11 @@ EOF
 
     for key in "APIM_PUBLISHER_NAME" "APIM_PUBLISHER_EMAIL" "POSTGRES_ADMIN_PASSWORD" "POSTGRES_AUTH_READONLY_PASSWORD" "JWT_SECRET" "CUSTOMER_JWT_SIGNING_KEY"; do
         local val="${vars_to_persist[$key]}"
-        if ! grep -q "^[[:space:]]*${key}=" "$target_file" 2>/dev/null; then
+        local escaped_val
+        escaped_val="$(printf '%s' "$val" | sed -e 's/[\\/&]/\\&/g')"
+        if grep -q "^[[:space:]]*${key}=" "$target_file" 2>/dev/null; then
+            sed -i -E "s|^[[:space:]]*${key}=.*$|${key}=\"${escaped_val}\"|" "$target_file"
+        else
             printf '%s="%s"\n' "$key" "$val" >> "$target_file"
         fi
     done
@@ -504,7 +509,7 @@ ensure_branch_protection() {
         --input - <<EOF 2>&1
 {
   "required_status_checks": null,
-  "enforce_admins": false,
+  "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false,
@@ -539,7 +544,7 @@ get_env_config() {
             STATE_RG="${STATE_RESOURCE_GROUP_HOMOLOG:-rg-catcar-tfstate-homolog}"
             DEPLOY_APP_NAME="catcar-github-homolog-deploy"
             AKS_CLUSTER_NAME="aks-catcar-homolog"
-            ACR_NAME="crccarhomolog"
+            ACR_NAME="catcarhomolog"
             KEY_VAULT_NAME="kv-catcar-homolog"
             LOG_ANALYTICS_NAME="log-catcar-homolog"
             APP_INSIGHTS_NAME="appi-catcar-homolog"
@@ -557,7 +562,7 @@ get_env_config() {
             STATE_RG="${STATE_RESOURCE_GROUP_PROD:-rg-catcar-tfstate-prod}"
             DEPLOY_APP_NAME="catcar-github-production-deploy"
             AKS_CLUSTER_NAME="aks-catcar-prod"
-            ACR_NAME="crccarprod"
+            ACR_NAME="catcarprod"
             KEY_VAULT_NAME="kv-catcar-prod"
             LOG_ANALYTICS_NAME="log-catcar-prod"
             APP_INSIGHTS_NAME="appi-catcar-prod"
@@ -717,7 +722,7 @@ fi
 if [[ -z "$AZURE_LOCATION" ]]; then
     if az group exists --name "CatCar" --subscription "$subscription_id" --output tsv 2>/dev/null | grep -q true; then
         AZURE_LOCATION="$(az group show --name "CatCar" --subscription "$subscription_id" --query location --output tsv)"
-    elif az group exists --name "rg-catcar-homolog" --subscription "$subscription_id" --query exists --output tsv 2>/dev/null | grep -q true; then
+    elif az group exists --name "rg-catcar-homolog" --subscription "$subscription_id" --output tsv 2>/dev/null | grep -q true; then
         AZURE_LOCATION="$(az group show --name "rg-catcar-homolog" --subscription "$subscription_id" --query location --output tsv)"
     else
         AZURE_LOCATION="brazilsouth"
@@ -853,10 +858,11 @@ ensure_role_assignment "$plan_service_principal_object_id" "ServicePrincipal" "R
 for target_repo in "${all_target_repos[@]}"; do
     repo_slug="${target_repo##*/}"
     clean_slug="${repo_slug//[^a-zA-Z0-9_-]/-}"
-    ensure_federated_credential "gh-${clean_slug}-pr" "repo:${target_repo}:pull_request"
     ensure_federated_credential "gh-${clean_slug}-main" "repo:${target_repo}:ref:refs/heads/main"
     ensure_federated_credential "gh-${clean_slug}-develop" "repo:${target_repo}:ref:refs/heads/develop"
 done
+
+declare -A deploy_client_id_by_env=()
 
 # Detect Kubernetes Terraform directory if present locally
 k8s_tf_dir=""
@@ -887,6 +893,7 @@ for env in "${environments[@]}"; do
     printf '\n--- Setting up Deploy Identity: %s ---\n' "$DEPLOY_APP_NAME"
     ensure_application "$DEPLOY_APP_NAME"
     deploy_client_id="$application_client_id"
+    deploy_client_id_by_env["$env"]="$deploy_client_id"
     ensure_service_principal
     deploy_service_principal_object_id="$service_principal_object_id"
 
@@ -898,7 +905,6 @@ for env in "${environments[@]}"; do
             ensure_federated_credential "gh-${clean_slug}-develop" "repo:${target_repo}:ref:refs/heads/develop"
         else
             ensure_federated_credential "gh-${clean_slug}-prod-env" "repo:${target_repo}:environment:production"
-            ensure_federated_credential "gh-${clean_slug}-main" "repo:${target_repo}:ref:refs/heads/main"
         fi
     done
 
@@ -920,6 +926,7 @@ for env in "${environments[@]}"; do
         export TF_VAR_apim_publisher_name="$APIM_PUBLISHER_NAME"
         export TF_VAR_apim_publisher_email="$APIM_PUBLISHER_EMAIL"
         export TF_VAR_customer_jwt_signing_key="$ENV_CUSTOMER_JWT_SIGNING_KEY"
+        export TF_VAR_admin_jwt_secret="$ENV_JWT_SECRET"
 
         if terraform -chdir="$k8s_tf_dir" init -input=false -reconfigure \
             -backend-config="resource_group_name=$STATE_RG" \
@@ -935,7 +942,7 @@ for env in "${environments[@]}"; do
                 printf 'Importing existing resource group %s into Kubernetes Terraform state (%s).\n' "$FOUNDATION_RG" "$STATE_KEY"
                 terraform -chdir="$k8s_tf_dir" import -input=false \
                     azurerm_resource_group.this \
-                    "/subscriptions/$subscription_id/resourceGroups/$FOUNDATION_RG" 2>/dev/null || true
+                    "/subscriptions/$subscription_id/resourceGroups/$FOUNDATION_RG"
             fi
         else
             printf 'Note: could not initialize Terraform backend for state %s; skipping state import.\n' "$STATE_KEY"
@@ -983,7 +990,9 @@ for target_repo in "${all_target_repos[@]}"; do
         gh api --method PUT "repos/$target_repo/environments/$GH_ENV" --silent 2>/dev/null || true
 
         # Environment-scoped variables
-        set_env_variable "$target_repo" "$GH_ENV" AZURE_DEPLOY_CLIENT_ID "$deploy_client_id"
+        env_deploy_client_id="${deploy_client_id_by_env[$env]:-}"
+        [[ -n "$env_deploy_client_id" ]] || fail "missing deploy client ID for environment: $env"
+        set_env_variable "$target_repo" "$GH_ENV" AZURE_DEPLOY_CLIENT_ID "$env_deploy_client_id"
         set_env_variable "$target_repo" "$GH_ENV" CATCAR_FOUNDATION_RESOURCE_GROUP "$FOUNDATION_RG"
         set_env_variable "$target_repo" "$GH_ENV" ASPIRE_WORKLOAD_RESOURCE_GROUP "$WORKLOAD_RG"
         set_env_variable "$target_repo" "$GH_ENV" TF_BACKEND_RESOURCE_GROUP "$STATE_RG"

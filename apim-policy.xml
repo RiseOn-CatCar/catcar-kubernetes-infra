@@ -17,52 +17,69 @@
       <when condition="@(context.Request.Method == &quot;POST&quot; &amp;&amp; context.Request.Url.Path.Equals(&quot;/api/v1/identity-access/auth/login&quot;, StringComparison.OrdinalIgnoreCase))">
         <set-backend-service backend-id="catcar-api-aks" />
       </when>
-      <when condition="@(context.Request.Url.Path.StartsWith(&quot;/health/&quot;, StringComparison.OrdinalIgnoreCase))">
+      <when condition="@(context.Request.Url.Path.StartsWith(&quot;/api/health/&quot;, StringComparison.OrdinalIgnoreCase))">
         <set-backend-service backend-id="catcar-api-aks" />
       </when>
       <when condition="@(context.Request.Url.Path.StartsWith(&quot;/api/v1/communication/approval-tokens/&quot;, StringComparison.OrdinalIgnoreCase))">
         <set-backend-service backend-id="catcar-api-aks" />
       </when>
-      <when condition="@(context.Request.Url.Path.StartsWith(&quot;/openapi/&quot;, StringComparison.OrdinalIgnoreCase) || context.Request.Url.Path.Equals(&quot;/docs&quot;, StringComparison.OrdinalIgnoreCase) || context.Request.Url.Path.StartsWith(&quot;/docs/&quot;, StringComparison.OrdinalIgnoreCase))">
+      <when condition="@(context.Request.Url.Path.StartsWith(&quot;/api/openapi/&quot;, StringComparison.OrdinalIgnoreCase) || context.Request.Url.Path.Equals(&quot;/api/docs&quot;, StringComparison.OrdinalIgnoreCase) || context.Request.Url.Path.StartsWith(&quot;/api/docs/&quot;, StringComparison.OrdinalIgnoreCase))">
         <set-backend-service backend-id="catcar-api-aks" />
       </when>
       <otherwise>
-        <validate-jwt header-name="Authorization"
-                      failed-validation-httpcode="401"
-                      failed-validation-error-message="Unauthorized: a valid CatCar access token is required."
-                      output-token-variable-name="catcar-jwt">
-          <issuer-signing-keys>
-            <key>{{catcar-jwt-signing-key}}</key>
-            <key>{{catcar-admin-jwt-secret}}</key>
-          </issuer-signing-keys>
-          <issuers><issuer>CatCar</issuer></issuers>
-          <audiences><audience>CatCar.Api</audience></audiences>
-          <required-claims>
-            <claim name="role" match="any">
-              <value>Customer</value>
-              <value>Administrador</value>
-              <value>Tecnico</value>
-              <value>Recepcionista</value>
-            </claim>
-          </required-claims>
-        </validate-jwt>
         <choose>
-          <when condition="@(((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims[&quot;role&quot;][0] == &quot;Customer&quot;)">
+          <when condition="@(context.Request.Url.Path.StartsWith(&quot;/api/v1/service-operations/customers/&quot;, StringComparison.OrdinalIgnoreCase))">
+            <validate-jwt header-name="Authorization"
+                          failed-validation-httpcode="401"
+                          failed-validation-error-message="Unauthorized: a valid CatCar access token is required."
+                          output-token-variable-name="catcar-jwt">
+              <issuer-signing-keys>
+                <key>{{catcar-jwt-signing-key}}</key>
+              </issuer-signing-keys>
+              <issuers><issuer>CatCar</issuer></issuers>
+              <audiences><audience>CatCar.Api</audience></audiences>
+              <required-claims>
+                <claim name="role"><value>Customer</value></claim>
+              </required-claims>
+            </validate-jwt>
             <rate-limit-by-key calls="60" renewal-period="60"
                                counter-key="@(((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims[&quot;sub&quot;][0])" />
             <choose>
-              <when condition="@(((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims.ContainsKey(&quot;customer_id&quot;))">
-                <set-header name="X-Customer-Id" exists-action="override">
-                  <value>@(((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims[&quot;customer_id&quot;][0])</value>
-                </set-header>
+              <when condition="@(!((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims.ContainsKey(&quot;customer_id&quot;))">
+                <return-response>
+                  <set-status code="401" reason="Unauthorized" />
+                  <set-body>Unauthorized: customer_id claim is required for customer access.</set-body>
+                </return-response>
               </when>
             </choose>
+            <set-header name="X-Customer-Id" exists-action="override">
+              <value>@(((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims[&quot;customer_id&quot;][0])</value>
+            </set-header>
             <choose>
-              <when condition="@(context.Request.Method == &quot;GET&quot; &amp;&amp; context.Request.Url.Path.StartsWith(&quot;/api/v1/service-operations/customers/&quot;, StringComparison.OrdinalIgnoreCase) &amp;&amp; context.Request.Url.Path.Split('/').Length &gt; 5 &amp;&amp; ((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims.ContainsKey(&quot;customer_id&quot;) &amp;&amp; !string.Equals(context.Request.Url.Path.Split('/')[5], ((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims[&quot;customer_id&quot;][0], StringComparison.OrdinalIgnoreCase))">
+              <when condition="@(context.Request.Url.Path.Split('/').Length &gt; 5 &amp;&amp; !string.Equals(context.Request.Url.Path.Split('/')[5], ((Jwt)context.Variables[&quot;catcar-jwt&quot;]).Claims[&quot;customer_id&quot;][0], StringComparison.OrdinalIgnoreCase))">
                 <return-response><set-status code="403" reason="Forbidden" /></return-response>
               </when>
             </choose>
           </when>
+          <otherwise>
+            <validate-jwt header-name="Authorization"
+                          failed-validation-httpcode="401"
+                          failed-validation-error-message="Unauthorized: a valid CatCar access token is required."
+                          output-token-variable-name="catcar-jwt">
+              <issuer-signing-keys>
+                <key>{{catcar-admin-jwt-secret}}</key>
+              </issuer-signing-keys>
+              <issuers><issuer>CatCar</issuer></issuers>
+              <audiences><audience>CatCar.Api</audience></audiences>
+              <required-claims>
+                <claim name="role" match="any">
+                  <value>Administrador</value>
+                  <value>Tecnico</value>
+                  <value>Recepcionista</value>
+                </claim>
+              </required-claims>
+            </validate-jwt>
+          </otherwise>
         </choose>
         <set-backend-service backend-id="catcar-api-aks" />
       </otherwise>

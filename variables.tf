@@ -113,7 +113,6 @@ variable "admin_jwt_secret" {
   description = "Signing key used by the administrative staff JWT issuer and APIM validation policy."
   type        = string
   sensitive   = true
-  default     = "CatCarAdminSecretSigningKey32BytesLong!"
 
   validation {
     condition     = length(var.admin_jwt_secret) >= 32
