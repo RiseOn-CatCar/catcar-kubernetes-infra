@@ -14,6 +14,8 @@ terraform {
 provider "azurerm" {
   features {}
 }
+data "azurerm_client_config" "current" {}
+
 
 locals {
   name_prefix = "${var.application_name}-${var.environment}"
@@ -166,6 +168,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   tags                              = local.tags
 
   azure_active_directory_role_based_access_control {
+    tenant_id          = data.azurerm_client_config.current.tenant_id
     azure_rbac_enabled = true
   }
 }
@@ -195,7 +198,7 @@ resource "azurerm_api_management" "this" {
     type = "SystemAssigned"
   }
 }
- 
+
 resource "azurerm_api_management_named_value" "customer_jwt_signing_key" {
   name                = "catcar-jwt-signing-key"
   display_name        = "catcar-jwt-signing-key"
@@ -212,8 +215,8 @@ resource "azurerm_api_management_api" "catcar" {
   revision            = "1"
   display_name        = "CatCar API"
   path                = "api"
-  service_url = var.api_backend_url
-  protocols   = ["https"]
+  service_url         = var.api_backend_url
+  protocols           = ["https"]
 }
 
 resource "azurerm_api_management_backend" "catcar" {
@@ -228,16 +231,16 @@ resource "azurerm_api_management_backend" "auth_function" {
   name                = "catcar-auth-function"
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
-  protocol            = "https"
+  protocol            = "http"
   url                 = var.auth_function_backend_url
 }
 
 locals {
   api_operations = {
-    customer_auth_post = { method = "POST", url_template = "auth/customer", display_name = "Customer authentication" }
+    customer_auth_post    = { method = "POST", url_template = "auth/customer", display_name = "Customer authentication" }
     customer_auth_options = { method = "OPTIONS", url_template = "auth/customer", display_name = "Customer authentication CORS preflight" }
-    login_post = { method = "POST", url_template = "v1/identity-access/auth/login", display_name = "Identity login" }
-    progress_get = { method = "GET", url_template = "v1/service-operations/work-orders/{id}/progress", display_name = "Work order progress" }
+    login_post            = { method = "POST", url_template = "v1/identity-access/auth/login", display_name = "Identity login" }
+    progress_get          = { method = "GET", url_template = "v1/service-operations/work-orders/{id}/progress", display_name = "Work order progress" }
   }
 }
 
@@ -307,6 +310,6 @@ resource "azurerm_api_management_api_policy" "catcar" {
   api_name            = azurerm_api_management_api.catcar.name
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
-  xml_content         = file("${path.module}/../apim-policy.xml")
+  xml_content         = file("${path.module}/apim-policy.xml")
   depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
 }

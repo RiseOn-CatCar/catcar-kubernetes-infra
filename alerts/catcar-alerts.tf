@@ -81,7 +81,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "os_processing_failure
 
     failing_periods {
       minimum_failing_periods_to_trigger_alert = 1
-      number_of_evaluation_periods              = 1
+      number_of_evaluation_periods             = 1
     }
   }
 
