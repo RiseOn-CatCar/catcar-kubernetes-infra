@@ -132,7 +132,7 @@ resource "azurerm_application_insights_workbook" "catcar_dashboard" {
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   display_name        = "CatCar Operations Dashboard"
-  data_json           = file("${path.module}/workbooks/catcar-dashboard.json")
+  data_json           = replace(file("${path.module}/workbooks/catcar-dashboard.json"), "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.insights/components/appi-catcar-prod", azurerm_application_insights.this.id)
   tags                = local.tags
 }
 

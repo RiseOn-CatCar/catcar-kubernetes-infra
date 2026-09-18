@@ -14,7 +14,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Daily Work Order Volume",
-        "query": "union\n  (requests | where (name contains 'OpenWorkOrder' or url endswith '/work-orders') and (resultCode == '201' or success == true) and (operation_Name contains 'POST' or name contains 'POST')),\n  (traces | where message has 'WorkOrder' and (message has 'opened' or message has 'Opened'))\n| summarize WorkOrdersCreated = count() by Day = bin(timestamp, 1d)\n| order by Day asc",
+        "query": "union\n  (requests\n  | where (name contains 'OpenWorkOrder' or url endswith '/work-orders') and (resultCode == '201' or success == true) and (operation_Name contains 'POST' or name contains 'POST')\n  | project timestamp, WorkOrderKey = tostring(coalesce(operation_Id, id))),\n  (traces\n  | where message has 'WorkOrder' and (message has 'opened' or message has 'Opened')\n  | project timestamp, WorkOrderKey = tostring(coalesce(operation_Id, itemId)))\n| where isnotempty(WorkOrderKey)\n| summarize FirstSeen = min(timestamp) by WorkOrderKey\n| summarize WorkOrdersCreated = count() by Day = bin(FirstSeen, 1d)\n| order by Day asc",
         "size": 0,
         "timeContext": {
           "durationMs": 2592000000
@@ -36,7 +36,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Average Execution Time per Status",
-        "query": "traces\n| where message has 'WorkOrder' or message has 'Status' or message has 'ExecutionTime'\n| extend Status = tostring(coalesce(customDimensions['Status'], customDimensions['TargetStatus'], extract(\"(Diagnostico|Execucao|Finalizacao|Diagnosis|Execution|Delivered|Completed)\", 1, message), 'Diagnostico'))\n| extend DurationHours = todouble(coalesce(customDimensions['DurationHours'], customDimensions['Duration'], 1.5))\n| summarize AverageDurationHours = round(avg(DurationHours), 2) by Status\n| order by AverageDurationHours desc",
+        "query": "traces\n| where message has 'WorkOrder' or message has 'Status' or message has 'ExecutionTime'\n| extend RawStatus = tostring(coalesce(customDimensions['Status'], customDimensions['TargetStatus'], extract(\"(Diagnóstico|Diagnostico|Execução|Execucao|Finalização|Finalizacao|Diagnosis|Execution|Delivered|Completed)\", 1, message)))\n| extend Status = case(\n    RawStatus in ('Diagnóstico', 'Diagnostico', 'Diagnosis'), 'Diagnóstico',\n    RawStatus in ('Execução', 'Execucao', 'Execution'), 'Execução',\n    RawStatus in ('Finalização', 'Finalizacao', 'Delivered', 'Completed'), 'Finalização',\n    ''\n  )\n| extend DurationHours = todouble(coalesce(customDimensions['DurationHours'], customDimensions['Duration']))\n| where isnotempty(Status) and isnotnull(DurationHours)\n| summarize AverageDurationHours = round(avg(DurationHours), 2) by Status\n| order by AverageDurationHours desc",
         "size": 0,
         "timeContext": {
           "durationMs": 2592000000
@@ -51,8 +51,8 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "title": "Integration Error Rates",
-        "query": "traces\n| where severityLevel >= 2 and (message has 'InventoryReservation' or message has 'Outbox' or message has 'Integration' or message has 'Wolverine' or message has 'WorkOrder')\n| extend Component = tostring(coalesce(customDimensions['Component'], customDimensions['Category'], 'WolverineOutbox'))\n| summarize FailureCount = count() by bin(timestamp, 1h), Component\n| order by timestamp asc",
+        "title": "Integration Failure Counts",
+        "query": "traces\n| where severityLevel >= 3 and (message has 'InventoryReservation' or message has 'Outbox' or message has 'Integration' or message has 'Wolverine' or message has 'WorkOrder')\n| extend Component = tostring(coalesce(customDimensions['Component'], customDimensions['Category'], case(\n    message has 'InventoryReservation', 'InventoryReservation',\n    message has 'Outbox', 'WolverineOutbox',\n    message has 'Integration', 'Integration',\n    message has 'Wolverine', 'Wolverine',\n    message has 'WorkOrder', 'WorkOrder',\n    'Unknown'\n  )))\n| summarize FailureCount = count() by bin(timestamp, 1h), Component\n| order by timestamp asc",
         "size": 0,
         "timeContext": {
           "durationMs": 604800000
