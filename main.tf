@@ -208,6 +208,15 @@ resource "azurerm_api_management_named_value" "customer_jwt_signing_key" {
   secret              = true
 }
 
+resource "azurerm_api_management_named_value" "admin_jwt_secret" {
+  name                = "catcar-admin-jwt-secret"
+  display_name        = "catcar-admin-jwt-secret"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  value               = var.admin_jwt_secret
+  secret              = true
+}
+
 resource "azurerm_api_management_api" "catcar" {
   name                = "catcar-api"
   resource_group_name = azurerm_resource_group.this.name
@@ -306,10 +315,90 @@ resource "azurerm_api_management_api_operation" "catcar_post_catch_all" {
   }
 }
 
+resource "azurerm_api_management_api_operation" "catcar_put_catch_all" {
+  operation_id        = "put-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "PUT catch all"
+  method              = "PUT"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_patch_catch_all" {
+  operation_id        = "patch-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "PATCH catch all"
+  method              = "PATCH"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_delete_catch_all" {
+  operation_id        = "delete-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "DELETE catch all"
+  method              = "DELETE"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_options_catch_all" {
+  operation_id        = "options-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "OPTIONS catch all"
+  method              = "OPTIONS"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
 resource "azurerm_api_management_api_policy" "catcar" {
   api_name            = azurerm_api_management_api.catcar.name
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   xml_content         = file("${path.module}/apim-policy.xml")
-  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
+  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_named_value.admin_jwt_secret, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
 }
