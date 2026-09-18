@@ -109,6 +109,17 @@ variable "customer_jwt_signing_key" {
   }
 }
 
+variable "admin_jwt_secret" {
+  description = "Signing key used by the administrative staff JWT issuer and APIM validation policy."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.admin_jwt_secret) >= 32
+    error_message = "admin_jwt_secret must contain at least 32 characters."
+  }
+}
+
 variable "api_backend_url" {
   description = "APIM-reachable internal load balancer URL for the CatCar API."
   type        = string
