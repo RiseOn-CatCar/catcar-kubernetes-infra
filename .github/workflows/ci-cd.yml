@@ -97,7 +97,6 @@ jobs:
         run: |
           terraform -chdir=alerts plan -input=false -out=alerts.tfplan
           terraform -chdir=alerts apply -input=false -auto-approve alerts.tfplan
-
   plan-and-apply-production:
     needs: [validate-k8s, validate-alerts]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AZURE_DEPLOY_CLIENT_ID != ''
