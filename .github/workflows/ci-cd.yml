@@ -47,12 +47,11 @@ jobs:
 
   plan-and-apply-homologation:
     needs: [validate-k8s, validate-alerts]
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push' && vars.AZURE_DEPLOY_CLIENT_ID != ''
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push' && (vars.AZURE_CLIENT_ID != '' || vars.AZURE_DEPLOY_CLIENT_ID != '')
     runs-on: ubuntu-latest
     environment: homologation
     env:
-      ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
-      TF_VAR_environment: homolog
+      ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
       TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'rg-catcar-homolog' }}
       TF_VAR_customer_jwt_signing_key: ${{ secrets.CUSTOMER_JWT_SIGNING_KEY }}
       TF_VAR_admin_jwt_secret: ${{ secrets.JWT_SECRET }}
@@ -70,7 +69,7 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Terraform Init (K8s Homologation)
@@ -99,12 +98,11 @@ jobs:
           terraform -chdir=alerts apply -input=false -auto-approve alerts.tfplan
   plan-and-apply-production:
     needs: [validate-k8s, validate-alerts]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AZURE_DEPLOY_CLIENT_ID != ''
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && (vars.AZURE_CLIENT_ID != '' || vars.AZURE_DEPLOY_CLIENT_ID != '')
     runs-on: ubuntu-latest
     environment: production
     env:
-      ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
-      TF_VAR_environment: prod
+      ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
       TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'CatCar' }}
       TF_VAR_customer_jwt_signing_key: ${{ secrets.CUSTOMER_JWT_SIGNING_KEY }}
       TF_VAR_admin_jwt_secret: ${{ secrets.JWT_SECRET }}
@@ -122,7 +120,7 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Terraform Init (K8s Production)
