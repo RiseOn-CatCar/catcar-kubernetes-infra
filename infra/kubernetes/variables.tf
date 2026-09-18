@@ -17,9 +17,9 @@ variable "location" {
 }
 
 variable "resource_group_name" {
-  description = "Resource group managed by this infrastructure repository."
+  description = "Foundation resource group prepared by the Azure bootstrap."
   type        = string
-  default     = "rg-catcar-prod"
+  default     = "CatCar"
 }
 
 variable "vnet_address_space" {
