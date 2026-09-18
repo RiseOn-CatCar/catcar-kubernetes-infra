@@ -13,13 +13,13 @@ variable "environment" {
 variable "location" {
   description = "Azure region for all resources."
   type        = string
-  default     = "brazilsouth"
+  default     = "eastus2"
 }
 
 variable "resource_group_name" {
   description = "Resource group for CatCar Kubernetes and platform infrastructure."
   type        = string
-  default     = "catcar-prod"
+  default     = "CatCar"
 }
 
 variable "vnet_address_space" {
@@ -43,25 +43,25 @@ variable "apim_subnet_prefix" {
 variable "aks_sku_tier" {
   description = "SKU Tier for the AKS cluster ('Free' for dev/test/homolog or 'Standard' for SLA-backed production)."
   type        = string
-  default     = "Free"
+  default     = "Standard"
 }
 
 variable "aks_vm_size" {
   description = "VM size for the AKS system node pool."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D2ads_v6"
 }
 
 variable "aks_min_node_count" {
   description = "Minimum node count for the AKS system pool."
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "aks_max_node_count" {
   description = "Maximum node count for the AKS system pool."
   type        = number
-  default     = 3
+  default     = 6
 }
 
 variable "private_endpoints_subnet_prefix" {

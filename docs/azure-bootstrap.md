@@ -81,7 +81,9 @@ export POSTGRES_ADMIN_PASSWORD_HOMOLOG="HomologAdminPassword123!"
 export POSTGRES_AUTH_READONLY_PASSWORD_HOMOLOG="HomologReadonlyPassword123!"
 export JWT_SECRET_HOMOLOG="HomologJwtSecretKeyHere32CharactersMin!"
 export CUSTOMER_JWT_SIGNING_KEY_HOMOLOG="HomologCustomerJwtSigningKeyHere32Min!"
-export FOUNDATION_RESOURCE_GROUP_HOMOLOG="rg-catcar-homolog"
+export FOUNDATION_RESOURCE_GROUP_HOMOLOG="catcar-homolog"
+export WORKLOAD_RESOURCE_GROUP_HOMOLOG="catcar-homolog"
+export STATE_RESOURCE_GROUP_HOMOLOG="catcar-homolog"
 
 # Production overrides:
 export POSTGRES_ADMIN_PASSWORD_PROD="ProdAdminPassword123!"
@@ -108,9 +110,9 @@ For each targeted environment, `bootstrap-azure.sh` provisions and binds the fol
 +---------------------------------------------------+---------------------------------------------------+
 |               HOMOLOGATION (homolog)              |                PRODUCTION (prod)                  |
 +---------------------------------------------------+---------------------------------------------------+
-| Foundation RG:  rg-catcar-homolog                 | Foundation RG:  CatCar                            |
-| Workloads RG:   rg-catcar-workloads-homolog       | Workloads RG:   rg-catcar-workloads-prod          |
-| State RG:       rg-catcar-tfstate-homolog         | State RG:       rg-catcar-tfstate-prod            |
+| Foundation RG:  catcar-homolog                    | Foundation RG:  CatCar                            |
+| Workloads RG:   catcar-homolog                    | Workloads RG:   rg-catcar-workloads-prod          |
+| State RG:       catcar-homolog                    | State RG:       rg-catcar-tfstate-prod            |
 | Storage Account:stcatcarhomolog<hash:0:8>         | Storage Account:stcatcarprod<hash:0:8>            |
 | Blob Container: tfstate (private, Entra-only)     | Blob Container: tfstate (private, Entra-only)     |
 +---------------------------------------------------+---------------------------------------------------+
@@ -127,7 +129,7 @@ The script establishes passwordless, keyless OpenID Connect (OIDC) integration b
 | App Registration | Roles & Scopes | Federated Credentials (Subjects) Configured |
 |---|---|---|
 | **`catcar-github-terraform-plan`** (Shared Plan Identity) | `Reader` on `/subscriptions/<id>`<br>`Storage Blob Data Contributor` on state storage accounts | For each repository (`catcar-app`, `catcar-auth-function`, `catcar-database-infra`, `catcar-kubernetes-infra`):<br>• `repo:<org>/<repo>:pull_request`<br>• `repo:<org>/<repo>:ref:refs/heads/main`<br>• `repo:<org>/<repo>:ref:refs/heads/develop` |
-| **`catcar-github-homolog-deploy`** (Homologation Deploy) | `Contributor` on `rg-catcar-homolog`<br>`User Access Administrator` on `rg-catcar-homolog`<br>`AKS RBAC Cluster Admin` on `rg-catcar-homolog`<br>`Contributor` on `rg-catcar-workloads-homolog`<br>`AcrPush` on `rg-catcar-homolog`<br>`Key Vault Secrets Officer` on `rg-catcar-homolog`<br>`Storage Blob Data Contributor` on homolog state | For each repository:<br>• `repo:<org>/<repo>:environment:homologation`<br>• `repo:<org>/<repo>:ref:refs/heads/develop` |
+| **`catcar-github-homolog-deploy`** (Homologation Deploy) | `Contributor` on `catcar-homolog`<br>`User Access Administrator` on `catcar-homolog`<br>`AKS RBAC Cluster Admin` on `catcar-homolog`<br>`AcrPush` on `catcar-homolog`<br>`Key Vault Secrets Officer` on `catcar-homolog`<br>`Storage Blob Data Contributor` on homolog state | For each repository:<br>• `repo:<org>/<repo>:environment:homologation`<br>• `repo:<org>/<repo>:ref:refs/heads/develop` |
 | **`catcar-github-production-deploy`** (Production Deploy) | `Contributor` on `CatCar`<br>`User Access Administrator` on `CatCar`<br>`AKS RBAC Cluster Admin` on `CatCar`<br>`Contributor` on `rg-catcar-workloads-prod`<br>`AcrPush` on `CatCar`<br>`Key Vault Secrets Officer` on `CatCar`<br>`Storage Blob Data Contributor` on prod state | For each repository:<br>• `repo:<org>/<repo>:environment:production`<br>• `repo:<org>/<repo>:ref:refs/heads/main` |
 
 ---
@@ -141,7 +143,7 @@ The script iterates through all target repositories and populates variables, sec
 * `AZURE_TENANT_ID`: Microsoft Entra tenant ID.
 * `AZURE_SUBSCRIPTION_ID`: Azure subscription ID.
 * `AZURE_LOCATION`: Azure deployment region (e.g. `brazilsouth`).
-* `CATCAR_FOUNDATION_RESOURCE_GROUP`: Default foundation resource group name (`CatCar` or `rg-catcar-homolog`).
+* `CATCAR_FOUNDATION_RESOURCE_GROUP`: Default foundation resource group name (`CatCar` or `catcar-homolog`).
 * `APIM_PUBLISHER_NAME`: Organization name for API Management.
 * `APIM_PUBLISHER_EMAIL`: Operations contact email.
 * `AZURE_TF_STATE_RG`: Default state backend resource group.
@@ -158,8 +160,8 @@ Unless `--skip-branch-protection` is specified, the script automatically configu
 #### 3. Environment-Scoped Configurations (`homologation` & `production`):
 * **Environment Variables**:
   * `AZURE_DEPLOY_CLIENT_ID`: Dedicated deploy application ID (`catcar-github-homolog-deploy` or `catcar-github-production-deploy`).
-  * `CATCAR_FOUNDATION_RESOURCE_GROUP`: `rg-catcar-homolog` or `CatCar`.
-  * `ASPIRE_WORKLOAD_RESOURCE_GROUP`: `rg-catcar-workloads-homolog` or `rg-catcar-workloads-prod`.
+  * `CATCAR_FOUNDATION_RESOURCE_GROUP`: `catcar-homolog` or `CatCar`.
+  * `ASPIRE_WORKLOAD_RESOURCE_GROUP`: `catcar-homolog` or `rg-catcar-workloads-prod`.
   * `TF_BACKEND_RESOURCE_GROUP`: State resource group.
   * `TF_BACKEND_STORAGE_ACCOUNT`: State storage account name.
   * `TF_BACKEND_CONTAINER`: `tfstate`.
