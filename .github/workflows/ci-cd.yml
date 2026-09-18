@@ -78,7 +78,8 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=homolog-catcar-kubernetes.tfstate"
+            -backend-config="key=homolog-catcar-kubernetes.tfstate" \
+            -backend-config="use_azuread_auth=true"
       - name: Terraform Plan & Apply (K8s Homologation)
         run: |
           terraform plan -input=false -out=k8s.tfplan
@@ -90,7 +91,8 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=homolog-catcar-alerts.tfstate"
+            -backend-config="key=homolog-catcar-alerts.tfstate" \
+            -backend-config="use_azuread_auth=true"
       - name: Terraform Plan & Apply (Alerts Homologation)
         if: vars.CATCAR_AKS_CLUSTER_ID != '' && vars.CATCAR_APPLICATION_INSIGHTS_ID != '' && vars.CATCAR_LOG_ANALYTICS_WORKSPACE_ID != ''
         run: |
@@ -129,7 +131,8 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=catcar-kubernetes.tfstate"
+            -backend-config="key=catcar-kubernetes.tfstate" \
+            -backend-config="use_azuread_auth=true"
       - name: Terraform Plan & Apply (K8s Production)
         run: |
           terraform plan -input=false -out=k8s.tfplan
@@ -141,7 +144,8 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=catcar-alerts.tfstate"
+            -backend-config="key=catcar-alerts.tfstate" \
+            -backend-config="use_azuread_auth=true"
       - name: Terraform Plan & Apply (Alerts Production)
         if: vars.CATCAR_AKS_CLUSTER_ID != '' && vars.CATCAR_APPLICATION_INSIGHTS_ID != '' && vars.CATCAR_LOG_ANALYTICS_WORKSPACE_ID != ''
         run: |
