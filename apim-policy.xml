@@ -33,11 +33,11 @@
                           failed-validation-httpcode="401"
                           failed-validation-error-message="Unauthorized: a valid CatCar access token is required."
                           output-token-variable-name="catcar-jwt">
+              <issuers><issuer>CatCar</issuer></issuers>
+              <audiences><audience>CatCar.Api</audience></audiences>
               <issuer-signing-keys>
                 <key>{{catcar-jwt-signing-key}}</key>
               </issuer-signing-keys>
-              <issuers><issuer>CatCar</issuer></issuers>
-              <audiences><audience>CatCar.Api</audience></audiences>
               <required-claims>
                 <claim name="role"><value>Customer</value></claim>
               </required-claims>
@@ -66,11 +66,11 @@
                           failed-validation-httpcode="401"
                           failed-validation-error-message="Unauthorized: a valid CatCar access token is required."
                           output-token-variable-name="catcar-jwt">
+              <issuers><issuer>CatCar</issuer></issuers>
+              <audiences><audience>CatCar.Api</audience></audiences>
               <issuer-signing-keys>
                 <key>{{catcar-admin-jwt-secret}}</key>
               </issuer-signing-keys>
-              <issuers><issuer>CatCar</issuer></issuers>
-              <audiences><audience>CatCar.Api</audience></audiences>
               <required-claims>
                 <claim name="role" match="any">
                   <value>Administrador</value>
