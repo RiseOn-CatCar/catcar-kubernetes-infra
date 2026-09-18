@@ -52,6 +52,7 @@ jobs:
     environment: homologation
     env:
       ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+      TF_VAR_environment: homolog
       TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'rg-catcar-homolog' }}
       TF_VAR_customer_jwt_signing_key: ${{ secrets.CUSTOMER_JWT_SIGNING_KEY }}
       TF_VAR_admin_jwt_secret: ${{ secrets.JWT_SECRET }}

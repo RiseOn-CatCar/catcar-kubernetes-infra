@@ -65,9 +65,9 @@ variable "private_endpoints_subnet_prefix" {
 }
 
 variable "availability_zones" {
-  description = "Availability zones assigned to the AKS system pool."
+  description = "Availability zones assigned to the AKS system pool when supported by the selected region."
   type        = list(string)
-  default     = ["1", "2", "3"]
+  default     = []
 }
 
 variable "zone_redundancy_enabled" {
