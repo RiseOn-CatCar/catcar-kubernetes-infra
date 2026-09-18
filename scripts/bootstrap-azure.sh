@@ -539,9 +539,9 @@ get_env_config() {
         homologation)
             ENV_NAME="homolog"
             GH_ENV="homologation"
-            FOUNDATION_RG="${FOUNDATION_RESOURCE_GROUP_HOMOLOG:-rg-catcar-homolog}"
-            WORKLOAD_RG="${WORKLOAD_RESOURCE_GROUP_HOMOLOG:-rg-catcar-workloads-homolog}"
-            STATE_RG="${STATE_RESOURCE_GROUP_HOMOLOG:-rg-catcar-tfstate-homolog}"
+            FOUNDATION_RG="${FOUNDATION_RESOURCE_GROUP_HOMOLOG:-catcar-homolog}"
+            WORKLOAD_RG="${WORKLOAD_RESOURCE_GROUP_HOMOLOG:-catcar-homolog}"
+            STATE_RG="${STATE_RESOURCE_GROUP_HOMOLOG:-catcar-homolog}"
             DEPLOY_APP_NAME="catcar-github-homolog-deploy"
             AKS_CLUSTER_NAME="aks-catcar-homolog"
             ACR_NAME="catcarhomolog"
@@ -722,8 +722,8 @@ fi
 if [[ -z "$AZURE_LOCATION" ]]; then
     if az group exists --name "CatCar" --subscription "$subscription_id" --output tsv 2>/dev/null | grep -q true; then
         AZURE_LOCATION="$(az group show --name "CatCar" --subscription "$subscription_id" --query location --output tsv)"
-    elif az group exists --name "rg-catcar-homolog" --subscription "$subscription_id" --output tsv 2>/dev/null | grep -q true; then
-        AZURE_LOCATION="$(az group show --name "rg-catcar-homolog" --subscription "$subscription_id" --query location --output tsv)"
+    elif az group exists --name "catcar-homolog" --subscription "$subscription_id" --output tsv 2>/dev/null | grep -q true; then
+        AZURE_LOCATION="$(az group show --name "catcar-homolog" --subscription "$subscription_id" --query location --output tsv)"
     else
         AZURE_LOCATION="brazilsouth"
     fi

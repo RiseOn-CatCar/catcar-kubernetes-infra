@@ -16,7 +16,7 @@ env:
   ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   ARM_USE_OIDC: true
   TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'CatCar' }}
-  TF_VAR_location: ${{ vars.AZURE_LOCATION || 'brazilsouth' }}
+  TF_VAR_location: ${{ vars.AZURE_LOCATION || 'eastus2' }}
 
 jobs:
   validate-k8s:
@@ -53,11 +53,16 @@ jobs:
     env:
       ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
       TF_VAR_environment: homolog
-      TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'rg-catcar-homolog' }}
+      TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'catcar-homolog' }}
+      TF_VAR_location: ${{ vars.AZURE_LOCATION || 'brazilsouth' }}
       TF_VAR_customer_jwt_signing_key: ${{ secrets.CUSTOMER_JWT_SIGNING_KEY }}
       TF_VAR_admin_jwt_secret: ${{ secrets.JWT_SECRET }}
       TF_VAR_apim_publisher_name: ${{ vars.APIM_PUBLISHER_NAME || 'CatCar Operations' }}
       TF_VAR_apim_publisher_email: ${{ vars.APIM_PUBLISHER_EMAIL || 'operations@catcar.com' }}
+      TF_VAR_aks_sku_tier: Free
+      TF_VAR_aks_vm_size: Standard_B2s
+      TF_VAR_aks_min_node_count: 1
+      TF_VAR_aks_max_node_count: 3
       TF_VAR_aks_cluster_id: ${{ vars.CATCAR_AKS_CLUSTER_ID || '' }}
       TF_VAR_application_insights_id: ${{ vars.CATCAR_APPLICATION_INSIGHTS_ID || '' }}
       TF_VAR_log_analytics_workspace_id: ${{ vars.CATCAR_LOG_ANALYTICS_WORKSPACE_ID || '' }}
@@ -76,7 +81,7 @@ jobs:
       - name: Terraform Init (K8s Homologation)
         run: |
           terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'catcar-homolog' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
             -backend-config="key=homolog-catcar-kubernetes.tfstate" \
@@ -89,7 +94,7 @@ jobs:
         if: vars.CATCAR_AKS_CLUSTER_ID != '' && vars.CATCAR_APPLICATION_INSIGHTS_ID != '' && vars.CATCAR_LOG_ANALYTICS_WORKSPACE_ID != ''
         run: |
           terraform -chdir=alerts init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'catcar-homolog' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
             -backend-config="key=homolog-catcar-alerts.tfstate" \
@@ -106,11 +111,17 @@ jobs:
     environment: production
     env:
       ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+      TF_VAR_environment: prod
       TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'CatCar' }}
+      TF_VAR_location: ${{ vars.AZURE_LOCATION || 'eastus2' }}
       TF_VAR_customer_jwt_signing_key: ${{ secrets.CUSTOMER_JWT_SIGNING_KEY }}
       TF_VAR_admin_jwt_secret: ${{ secrets.JWT_SECRET }}
       TF_VAR_apim_publisher_name: ${{ vars.APIM_PUBLISHER_NAME || 'CatCar Operations' }}
       TF_VAR_apim_publisher_email: ${{ vars.APIM_PUBLISHER_EMAIL || 'operations@catcar.com' }}
+      TF_VAR_aks_sku_tier: Standard
+      TF_VAR_aks_vm_size: Standard_D2ads_v6
+      TF_VAR_aks_min_node_count: 2
+      TF_VAR_aks_max_node_count: 6
       TF_VAR_aks_cluster_id: ${{ vars.CATCAR_AKS_CLUSTER_ID || '' }}
       TF_VAR_application_insights_id: ${{ vars.CATCAR_APPLICATION_INSIGHTS_ID || '' }}
       TF_VAR_log_analytics_workspace_id: ${{ vars.CATCAR_LOG_ANALYTICS_WORKSPACE_ID || '' }}
@@ -129,7 +140,7 @@ jobs:
       - name: Terraform Init (K8s Production)
         run: |
           terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate-prod' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
             -backend-config="key=catcar-kubernetes.tfstate" \
@@ -142,7 +153,7 @@ jobs:
         if: vars.CATCAR_AKS_CLUSTER_ID != '' && vars.CATCAR_APPLICATION_INSIGHTS_ID != '' && vars.CATCAR_LOG_ANALYTICS_WORKSPACE_ID != ''
         run: |
           terraform -chdir=alerts init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate-prod' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
             -backend-config="key=catcar-alerts.tfstate" \

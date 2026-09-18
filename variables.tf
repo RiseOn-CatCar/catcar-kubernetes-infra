@@ -17,7 +17,7 @@ variable "location" {
 }
 
 variable "resource_group_name" {
-  description = "Foundation resource group prepared by the Azure bootstrap."
+  description = "Resource group for CatCar Kubernetes and platform infrastructure."
   type        = string
   default     = "CatCar"
 }
@@ -38,6 +38,12 @@ variable "apim_subnet_prefix" {
   description = "Dedicated subnet used by API Management."
   type        = string
   default     = "10.20.2.0/24"
+}
+
+variable "aks_sku_tier" {
+  description = "SKU Tier for the AKS cluster ('Free' for dev/test/homolog or 'Standard' for SLA-backed production)."
+  type        = string
+  default     = "Standard"
 }
 
 variable "aks_vm_size" {
