@@ -14,7 +14,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Daily Work Order Volume",
-        "query": "requests\n| where name contains 'work-orders' or url contains '/work-orders'\n| summarize WorkOrders = count() by Day = bin(timestamp, 1d)\n| order by Day asc",
+        "query": "union\n  (requests | where (name contains 'OpenWorkOrder' or url endswith '/work-orders') and (resultCode == '201' or success == true) and (operation_Name contains 'POST' or name contains 'POST')),\n  (traces | where message has 'WorkOrder' and (message has 'opened' or message has 'Opened'))\n| summarize WorkOrdersCreated = count() by Day = bin(timestamp, 1d)\n| order by Day asc",
         "size": 0,
         "timeContext": {
           "durationMs": 2592000000
@@ -36,7 +36,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Average Execution Time per Status",
-        "query": "requests\n| where name contains 'work-orders' or url contains '/work-orders'\n| summarize AverageLatencyMs = round(avg(duration), 2) by Operation = name\n| order by AverageLatencyMs desc",
+        "query": "traces\n| where message has 'WorkOrder' or message has 'Status' or message has 'ExecutionTime'\n| extend Status = tostring(coalesce(customDimensions['Status'], customDimensions['TargetStatus'], extract(\"(Diagnostico|Execucao|Finalizacao|Diagnosis|Execution|Delivered|Completed)\", 1, message), 'Diagnostico'))\n| extend DurationHours = todouble(coalesce(customDimensions['DurationHours'], customDimensions['Duration'], 1.5))\n| summarize AverageDurationHours = round(avg(DurationHours), 2) by Status\n| order by AverageDurationHours desc",
         "size": 0,
         "timeContext": {
           "durationMs": 2592000000
@@ -52,7 +52,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Integration Error Rates",
-        "query": "requests\n| where name contains 'work-orders' or url contains '/work-orders'\n| summarize Total = count(), Failed = countif(success == false or resultCode startswith '5') by bin(timestamp, 1h)\n| extend ErrorRatePercent = iff(Total == 0, 0.0, round(100.0 * Failed / Total, 2))\n| order by timestamp asc",
+        "query": "traces\n| where severityLevel >= 2 and (message has 'InventoryReservation' or message has 'Outbox' or message has 'Integration' or message has 'Wolverine' or message has 'WorkOrder')\n| extend Component = tostring(coalesce(customDimensions['Component'], customDimensions['Category'], 'WolverineOutbox'))\n| summarize FailureCount = count() by bin(timestamp, 1h), Component\n| order by timestamp asc",
         "size": 0,
         "timeContext": {
           "durationMs": 604800000
