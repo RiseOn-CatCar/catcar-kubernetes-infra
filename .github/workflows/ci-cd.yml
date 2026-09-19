@@ -50,6 +50,8 @@ jobs:
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push' && vars.AZURE_CLIENT_ID != ''
     runs-on: ubuntu-latest
     environment: homologation
+    env:
+      TF_VAR_aks_vm_size: Standard_D2s_v6
     steps:
       - uses: actions/checkout@v4
       - name: Setup Terraform
