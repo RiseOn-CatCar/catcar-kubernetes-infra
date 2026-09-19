@@ -60,7 +60,7 @@ jobs:
       TF_VAR_apim_publisher_name: ${{ vars.APIM_PUBLISHER_NAME || 'CatCar Operations' }}
       TF_VAR_apim_publisher_email: ${{ vars.APIM_PUBLISHER_EMAIL || 'operations@catcar.com' }}
       TF_VAR_aks_sku_tier: Free
-      TF_VAR_aks_vm_size: Standard_B2s
+      TF_VAR_aks_vm_size: Standard_D2s_v6
       TF_VAR_aks_min_node_count: 1
       TF_VAR_aks_max_node_count: 3
       TF_VAR_aks_cluster_id: ${{ vars.CATCAR_AKS_CLUSTER_ID || '' }}
