@@ -17,7 +17,7 @@ variable "location" {
 }
 
 variable "resource_group_name" {
-  description = "Foundation resource group prepared by the Azure bootstrap."
+  description = "Resource group for CatCar Kubernetes and platform infrastructure."
   type        = string
   default     = "CatCar"
 }
@@ -40,10 +40,16 @@ variable "apim_subnet_prefix" {
   default     = "10.20.2.0/24"
 }
 
+variable "aks_sku_tier" {
+  description = "SKU Tier for the AKS cluster ('Free' for dev/test/homolog or 'Standard' for SLA-backed production)."
+  type        = string
+  default     = "Standard"
+}
+
 variable "aks_vm_size" {
   description = "VM size for the AKS system node pool."
   type        = string
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D2ads_v6"
 }
 
 variable "aks_min_node_count" {
@@ -65,9 +71,9 @@ variable "private_endpoints_subnet_prefix" {
 }
 
 variable "availability_zones" {
-  description = "Availability zones assigned to the AKS system pool."
+  description = "Availability zones assigned to the AKS system pool when supported by the selected region."
   type        = list(string)
-  default     = ["1", "2", "3"]
+  default     = []
 }
 
 variable "zone_redundancy_enabled" {
@@ -106,6 +112,17 @@ variable "customer_jwt_signing_key" {
   validation {
     condition     = length(var.customer_jwt_signing_key) >= 32
     error_message = "customer_jwt_signing_key must contain at least 32 characters."
+  }
+}
+
+variable "admin_jwt_secret" {
+  description = "Signing key used by the administrative staff JWT issuer and APIM validation policy."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.admin_jwt_secret) >= 32
+    error_message = "admin_jwt_secret must contain at least 32 characters."
   }
 }
 
