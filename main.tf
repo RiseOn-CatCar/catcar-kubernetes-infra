@@ -55,6 +55,54 @@ resource "azurerm_subnet" "apim" {
   address_prefixes     = [var.apim_subnet_prefix]
 }
 
+resource "azurerm_network_security_group" "apim" {
+  name                = "nsg-apim-${local.name_prefix}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+
+  security_rule {
+    name                       = "AllowApiManagementControlPlane"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3443"
+    source_address_prefix      = "ApiManagement"
+    destination_address_prefix = "VirtualNetwork"
+  }
+
+  security_rule {
+    name                       = "AllowAzureLoadBalancerHealthProbe"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "6390"
+    source_address_prefix      = "AzureLoadBalancer"
+    destination_address_prefix = "VirtualNetwork"
+  }
+
+  security_rule {
+    name                       = "AllowGatewayHttps"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "VirtualNetwork"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "apim" {
+  subnet_id                 = azurerm_subnet.apim.id
+  network_security_group_id = azurerm_network_security_group.apim.id
+}
+
 resource "azurerm_subnet" "private_endpoints" {
   name                 = "snet-private-endpoints"
   resource_group_name  = azurerm_resource_group.this.name
@@ -127,12 +175,21 @@ resource "azurerm_application_insights" "this" {
   tags                = local.tags
 }
 
+resource "azurerm_application_insights_workbook" "catcar_dashboard" {
+  name                = "b83d5a71-6c2e-4b91-8e03-9d7a2f1b4c5e"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  display_name        = "CatCar Operations Dashboard"
+  data_json           = replace(file("${path.module}/workbooks/catcar-dashboard.json"), "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.insights/components/appi-catcar-prod", azurerm_application_insights.this.id)
+  tags                = local.tags
+}
+
 resource "azurerm_kubernetes_cluster" "this" {
   name                = "aks-${local.name_prefix}"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   dns_prefix          = local.name_prefix
-  sku_tier            = "Standard"
+  sku_tier            = var.aks_sku_tier
 
   default_node_pool {
     name                 = "system"
@@ -150,9 +207,10 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 
   network_profile {
-    network_plugin    = "azure"
-    network_policy    = "cilium"
-    load_balancer_sku = "standard"
+    network_plugin     = "azure"
+    network_data_plane = "cilium"
+    network_policy     = "cilium"
+    load_balancer_sku  = "standard"
   }
 
   oms_agent {
@@ -197,6 +255,8 @@ resource "azurerm_api_management" "this" {
   identity {
     type = "SystemAssigned"
   }
+
+  depends_on = [azurerm_subnet_network_security_group_association.apim]
 }
 
 resource "azurerm_api_management_named_value" "customer_jwt_signing_key" {
@@ -205,6 +265,15 @@ resource "azurerm_api_management_named_value" "customer_jwt_signing_key" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   value               = var.customer_jwt_signing_key
+  secret              = true
+}
+
+resource "azurerm_api_management_named_value" "admin_jwt_secret" {
+  name                = "catcar-admin-jwt-secret"
+  display_name        = "catcar-admin-jwt-secret"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  value               = var.admin_jwt_secret
   secret              = true
 }
 
@@ -306,10 +375,90 @@ resource "azurerm_api_management_api_operation" "catcar_post_catch_all" {
   }
 }
 
+resource "azurerm_api_management_api_operation" "catcar_put_catch_all" {
+  operation_id        = "put-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "PUT catch all"
+  method              = "PUT"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_patch_catch_all" {
+  operation_id        = "patch-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "PATCH catch all"
+  method              = "PATCH"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_delete_catch_all" {
+  operation_id        = "delete-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "DELETE catch all"
+  method              = "DELETE"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
+resource "azurerm_api_management_api_operation" "catcar_options_catch_all" {
+  operation_id        = "options-catch-all"
+  api_name            = azurerm_api_management_api.catcar.name
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  display_name        = "OPTIONS catch all"
+  method              = "OPTIONS"
+  url_template        = "{*path}"
+
+  template_parameter {
+    name     = "path"
+    type     = "string"
+    required = false
+  }
+
+  response {
+    status_code = 200
+  }
+}
+
 resource "azurerm_api_management_api_policy" "catcar" {
   api_name            = azurerm_api_management_api.catcar.name
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   xml_content         = file("${path.module}/apim-policy.xml")
-  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
+  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_named_value.admin_jwt_secret, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
 }
