@@ -49,7 +49,7 @@ variable "aks_sku_tier" {
 variable "aks_vm_size" {
   description = "VM size for the AKS system node pool."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D2s_v6"
 }
 
 variable "aks_min_node_count" {
