@@ -13,13 +13,13 @@ variable "environment" {
 variable "location" {
   description = "Azure region for all resources."
   type        = string
-  default     = "eastus2"
+  default     = "eastus"
 }
 
 variable "resource_group_name" {
   description = "Resource group for CatCar Kubernetes and platform infrastructure."
   type        = string
-  default     = "CatCar"
+  default     = "catcar-prod"
 }
 
 variable "vnet_address_space" {
@@ -34,52 +34,40 @@ variable "aks_subnet_prefix" {
   default     = "10.20.1.0/24"
 }
 
-variable "apim_subnet_prefix" {
-  description = "Dedicated subnet used by API Management."
+variable "functions_subnet_prefix" {
+  description = "Dedicated subnet delegated to Microsoft.App/environments for Azure Functions."
   type        = string
-  default     = "10.20.2.0/24"
+  default     = "10.20.3.0/27"
 }
 
 variable "aks_sku_tier" {
-  description = "SKU Tier for the AKS cluster ('Free' for dev/test/homolog or 'Standard' for SLA-backed production)."
+  description = "SKU Tier for the AKS cluster ('Free' for student/academic deployment)."
   type        = string
-  default     = "Standard"
+  default     = "Free"
 }
 
 variable "aks_vm_size" {
   description = "VM size for the AKS system node pool."
   type        = string
-  default     = "Standard_D2ads_v6"
+  default     = "Standard_B2s"
 }
 
 variable "aks_min_node_count" {
   description = "Minimum node count for the AKS system pool."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "aks_max_node_count" {
   description = "Maximum node count for the AKS system pool."
   type        = number
-  default     = 6
-}
-
-variable "private_endpoints_subnet_prefix" {
-  description = "Subnet used by private endpoints for foundation services."
-  type        = string
-  default     = "10.20.4.0/24"
+  default     = 2
 }
 
 variable "availability_zones" {
   description = "Availability zones assigned to the AKS system pool when supported by the selected region."
   type        = list(string)
   default     = []
-}
-
-variable "zone_redundancy_enabled" {
-  description = "Whether Premium ACR is zone redundant."
-  type        = bool
-  default     = true
 }
 
 variable "log_retention_days" {
@@ -91,17 +79,19 @@ variable "log_retention_days" {
 variable "apim_publisher_name" {
   description = "Display name for the APIM publisher."
   type        = string
+  default     = "CatCar Operations"
 }
 
 variable "apim_publisher_email" {
   description = "Contact email for the APIM publisher."
   type        = string
+  default     = "operations@catcar.com"
 }
 
 variable "apim_sku_name" {
-  description = "APIM SKU; Internal VNet injection requires a supported SKU."
+  description = "APIM SKU for serverless Consumption architecture."
   type        = string
-  default     = "Developer_1"
+  default     = "Consumption_0"
 }
 
 variable "customer_jwt_signing_key" {
@@ -126,16 +116,39 @@ variable "admin_jwt_secret" {
   }
 }
 
-variable "api_backend_url" {
-  description = "APIM-reachable internal load balancer URL for the CatCar API."
+variable "gateway_backend_key" {
+  description = "Shared secret key injected by APIM and required by origin workloads in Production."
   type        = string
-  default     = "http://catcar-api.catcar.internal"
+  sensitive   = true
+
+  validation {
+    condition     = length(var.gateway_backend_key) >= 32
+    error_message = "gateway_backend_key must contain at least 32 characters."
+  }
+}
+
+variable "api_backend_url" {
+  description = "APIM backend URL for the CatCar API. If empty, defaults to the public IP FQDN."
+  type        = string
+  default     = ""
 }
 
 variable "auth_function_backend_url" {
-  description = "Private URL for the customer authentication function backend."
+  description = "APIM backend URL for the customer auth Function. If empty, defaults to deterministic Function FQDN."
   type        = string
-  default     = "https://auth-function.internal.catcar.local"
+  default     = ""
+}
+
+variable "api_dns_label" {
+  description = "DNS label prefix for the AKS LoadBalancer public IP."
+  type        = string
+  default     = ""
+}
+
+variable "student_credit_budget_brl" {
+  description = "Total student credit budget amount in billing currency."
+  type        = number
+  default     = 500
 }
 
 variable "tags" {

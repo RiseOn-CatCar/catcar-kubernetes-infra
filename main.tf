@@ -14,17 +14,23 @@ terraform {
 provider "azurerm" {
   features {}
 }
-data "azurerm_client_config" "current" {}
 
+data "azurerm_client_config" "current" {}
 
 locals {
   name_prefix = "${var.application_name}-${var.environment}"
-  acr_name    = substr(lower(replace("${var.application_name}${var.environment}", "/[^0-9a-z]/", "")), 0, 50)
+  sub_suffix  = substr(data.azurerm_client_config.current.subscription_id, 0, 8)
+  acr_name    = lower(replace("catcarprod${local.sub_suffix}", "/[^0-9a-z]/", ""))
   tags = merge(var.tags, {
     application = var.application_name
     environment = var.environment
     managed_by  = "terraform"
   })
+
+  default_api_backend_url           = "https://${azurerm_public_ip.api.fqdn}"
+  default_auth_function_backend_url = "https://func-catcar-prod-${local.sub_suffix}.azurewebsites.net"
+  effective_api_backend_url           = var.api_backend_url != "" ? var.api_backend_url : local.default_api_backend_url
+  effective_auth_function_backend_url = var.auth_function_backend_url != "" ? var.auth_function_backend_url : local.default_auth_function_backend_url
 }
 
 resource "azurerm_resource_group" "this" {
@@ -48,112 +54,39 @@ resource "azurerm_subnet" "aks" {
   address_prefixes     = [var.aks_subnet_prefix]
 }
 
-resource "azurerm_subnet" "apim" {
-  name                 = "snet-apim"
+resource "azurerm_subnet" "functions" {
+  name                 = "snet-functions"
   resource_group_name  = azurerm_resource_group.this.name
   virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = [var.apim_subnet_prefix]
+  address_prefixes     = [var.functions_subnet_prefix]
+
+  delegation {
+    name = "functions-delegation"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
 }
 
-resource "azurerm_network_security_group" "apim" {
-  name                = "nsg-apim-${local.name_prefix}"
+resource "azurerm_public_ip" "api" {
+  name                = "pip-${local.name_prefix}-api"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  domain_name_label   = var.api_dns_label != "" ? var.api_dns_label : "catcar-api-prod-${local.sub_suffix}"
   tags                = local.tags
-
-  security_rule {
-    name                       = "AllowApiManagementControlPlane"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "3443"
-    source_address_prefix      = "ApiManagement"
-    destination_address_prefix = "VirtualNetwork"
-  }
-
-  security_rule {
-    name                       = "AllowAzureLoadBalancerHealthProbe"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "6390"
-    source_address_prefix      = "AzureLoadBalancer"
-    destination_address_prefix = "VirtualNetwork"
-  }
-
-  security_rule {
-    name                       = "AllowGatewayHttps"
-    priority                   = 120
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "443"
-    source_address_prefix      = "Internet"
-    destination_address_prefix = "VirtualNetwork"
-  }
-}
-
-resource "azurerm_subnet_network_security_group_association" "apim" {
-  subnet_id                 = azurerm_subnet.apim.id
-  network_security_group_id = azurerm_network_security_group.apim.id
-}
-
-resource "azurerm_subnet" "private_endpoints" {
-  name                 = "snet-private-endpoints"
-  resource_group_name  = azurerm_resource_group.this.name
-  virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = [var.private_endpoints_subnet_prefix]
-}
-
-resource "azurerm_private_dns_zone" "acr" {
-  name                = "privatelink.azurecr.io"
-  resource_group_name = azurerm_resource_group.this.name
-  tags                = local.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "acr" {
-  name                  = "pdnslink-acr-${local.name_prefix}"
-  private_dns_zone_name = azurerm_private_dns_zone.acr.name
-  virtual_network_id    = azurerm_virtual_network.this.id
-  resource_group_name   = azurerm_resource_group.this.name
 }
 
 resource "azurerm_container_registry" "this" {
   name                          = local.acr_name
   resource_group_name           = azurerm_resource_group.this.name
   location                      = azurerm_resource_group.this.location
-  sku                           = "Premium"
+  sku                           = "Basic"
   admin_enabled                 = false
-  public_network_access_enabled = false
-  zone_redundancy_enabled       = var.zone_redundancy_enabled
+  public_network_access_enabled = true
   tags                          = local.tags
-}
-
-resource "azurerm_private_endpoint" "acr" {
-  name                = "pe-acr-${local.name_prefix}"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
-  subnet_id           = azurerm_subnet.private_endpoints.id
-  tags                = local.tags
-
-  private_service_connection {
-    name                           = "psc-acr-${local.name_prefix}"
-    private_connection_resource_id = azurerm_container_registry.this.id
-    subresource_names              = ["registry"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "acr-private-dns"
-    private_dns_zone_ids = [azurerm_private_dns_zone.acr.id]
-  }
-
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.acr]
 }
 
 resource "azurerm_log_analytics_workspace" "this" {
@@ -161,6 +94,7 @@ resource "azurerm_log_analytics_workspace" "this" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   sku                 = "PerGB2018"
+  daily_quota_gb      = 0.1
   retention_in_days   = var.log_retention_days
   tags                = local.tags
 }
@@ -218,7 +152,7 @@ resource "azurerm_kubernetes_cluster" "this" {
     msi_auth_for_monitoring_enabled = true
   }
 
-  azure_policy_enabled              = true
+  azure_policy_enabled              = false
   role_based_access_control_enabled = true
   oidc_issuer_enabled               = true
   workload_identity_enabled         = true
@@ -239,24 +173,17 @@ resource "azurerm_role_assignment" "aks_acr_pull" {
 }
 
 resource "azurerm_api_management" "this" {
-  name                 = "apim-${local.name_prefix}"
-  location             = azurerm_resource_group.this.location
-  resource_group_name  = azurerm_resource_group.this.name
-  publisher_name       = var.apim_publisher_name
-  publisher_email      = var.apim_publisher_email
-  sku_name             = var.apim_sku_name
-  virtual_network_type = "External"
-  tags                 = local.tags
-
-  virtual_network_configuration {
-    subnet_id = azurerm_subnet.apim.id
-  }
+  name                = "apim-${local.name_prefix}-${local.sub_suffix}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  publisher_name      = var.apim_publisher_name
+  publisher_email     = var.apim_publisher_email
+  sku_name            = var.apim_sku_name
+  tags                = local.tags
 
   identity {
     type = "SystemAssigned"
   }
-
-  depends_on = [azurerm_subnet_network_security_group_association.apim]
 }
 
 resource "azurerm_api_management_named_value" "customer_jwt_signing_key" {
@@ -277,6 +204,15 @@ resource "azurerm_api_management_named_value" "admin_jwt_secret" {
   secret              = true
 }
 
+resource "azurerm_api_management_named_value" "gateway_backend_key" {
+  name                = "gateway-backend-key"
+  display_name        = "gateway-backend-key"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  value               = var.gateway_backend_key
+  secret              = true
+}
+
 resource "azurerm_api_management_api" "catcar" {
   name                = "catcar-api"
   resource_group_name = azurerm_resource_group.this.name
@@ -284,7 +220,7 @@ resource "azurerm_api_management_api" "catcar" {
   revision            = "1"
   display_name        = "CatCar API"
   path                = "api"
-  service_url         = var.api_backend_url
+  service_url         = local.effective_api_backend_url
   protocols           = ["https"]
 }
 
@@ -293,7 +229,7 @@ resource "azurerm_api_management_backend" "catcar" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   protocol            = "http"
-  url                 = var.api_backend_url
+  url                 = local.effective_api_backend_url
 }
 
 resource "azurerm_api_management_backend" "auth_function" {
@@ -301,7 +237,28 @@ resource "azurerm_api_management_backend" "auth_function" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   protocol            = "http"
-  url                 = var.auth_function_backend_url
+  url                 = local.effective_auth_function_backend_url
+}
+
+resource "azurerm_api_management_logger" "app_insights" {
+  name                = "app-insights-logger"
+  api_management_name = azurerm_api_management.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  resource_id         = azurerm_application_insights.this.id
+
+  application_insights {
+    instrumentation_key = azurerm_application_insights.this.instrumentation_key
+  }
+}
+
+resource "azurerm_api_management_api_diagnostic" "catcar" {
+  identifier               = "applicationinsights"
+  resource_group_name      = azurerm_resource_group.this.name
+  api_management_name      = azurerm_api_management.this.name
+  api_name                 = azurerm_api_management_api.catcar.name
+  api_management_logger_id = azurerm_api_management_logger.app_insights.id
+  sampling_percentage      = 50.0
+  always_log_errors        = true
 }
 
 locals {
@@ -460,5 +417,57 @@ resource "azurerm_api_management_api_policy" "catcar" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   xml_content         = file("${path.module}/apim-policy.xml")
-  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_named_value.admin_jwt_secret, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
+  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_named_value.admin_jwt_secret, azurerm_api_management_named_value.gateway_backend_key, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
+}
+
+resource "azurerm_consumption_budget_subscription" "student_credit" {
+  name            = "catcar-student-budget"
+  subscription_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
+  amount          = var.student_credit_budget_brl
+  time_grain      = "Monthly"
+
+  time_period {
+    start_date = "2026-09-01T00:00:00Z"
+    end_date   = "2028-08-31T00:00:00Z"
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 50
+    threshold_type = "Actual"
+    contact_emails = [var.apim_publisher_email]
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 75
+    threshold_type = "Actual"
+    contact_emails = [var.apim_publisher_email]
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 90
+    threshold_type = "Actual"
+    contact_emails = [var.apim_publisher_email]
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 100
+    threshold_type = "Actual"
+    contact_emails = [var.apim_publisher_email]
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 90
+    threshold_type = "Forecasted"
+    contact_emails = [var.apim_publisher_email]
+  }
 }

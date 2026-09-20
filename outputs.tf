@@ -68,3 +68,28 @@ output "application_insights_name" {
   description = "Application Insights resource name."
   value       = azurerm_application_insights.this.name
 }
+
+output "api_public_ip_address" {
+  description = "Static public IP address allocated for the CatCar API Kubernetes LoadBalancer."
+  value       = azurerm_public_ip.api.ip_address
+}
+
+output "api_public_ip_fqdn" {
+  description = "FQDN of the static public IP allocated for the CatCar API."
+  value       = azurerm_public_ip.api.fqdn
+}
+
+output "api_public_ip_name" {
+  description = "Resource name of the static public IP allocated for the CatCar API."
+  value       = azurerm_public_ip.api.name
+}
+
+output "functions_subnet_id" {
+  description = "Subnet ID dedicated to Microsoft.App/environments for the Flex Consumption Function."
+  value       = azurerm_subnet.functions.id
+}
+
+output "function_app_fqdn" {
+  description = "Deterministic FQDN for the production customer authentication Flex Function."
+  value       = "func-catcar-prod-${substr(data.azurerm_client_config.current.subscription_id, 0, 8)}.azurewebsites.net"
+}

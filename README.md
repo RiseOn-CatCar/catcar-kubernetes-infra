@@ -1,52 +1,52 @@
 # CatCar - Kubernetes & Platform Infrastructure (`catcar-kubernetes-infra`)
 
-Terraform Infrastructure as Code (IaC) repository provisioning core networking, container orchestration (AKS), container registry (ACR), API Gateway (APIM), and Azure Monitor observability alerting for the CatCar platform.
+Terraform Infrastructure as Code (IaC) repository provisioning core networking, container orchestration (AKS), container registry (ACR), API Gateway (APIM), and Azure Monitor observability alerting for the CatCar platform under the **academic cloud consolidation model**.
 
 ---
 
 ## Provisioned Infrastructure
 
-- **Networking**: Azure Virtual Network (`vnet-catcar-*`) with subnets for AKS (`snet-aks`), API Management (`snet-apim`), and Private Endpoints (`snet-private-endpoints`).
-- **Container Orchestration**: Azure Kubernetes Service (AKS) with Azure CNI, Workload Identity, Microsoft Entra RBAC, and Container Insights.
-- **Container Registry**: Azure Container Registry (ACR) configured with automated RBAC `AcrPull` bindings to AKS kubelet identity.
-- **API Gateway**: Azure API Management (APIM) with custom XML policies (`apim-policy.xml`) routing public traffic to AKS backend and serverless Auth Function.
-- **Observability & Alerting (`alerts/`)**: Log Analytics Workspace, Application Insights, Action Groups, Scheduled Query Alert rules, Metric Alerts (CPU, Memory, Latency > 2s), and synthetic readiness uptime probes.
+- **Networking**: Azure Virtual Network (`vnet-catcar-prod`) with subnets for AKS (`snet-aks`, `10.20.1.0/24`) and Azure Functions (`snet-functions`, `10.20.3.0/27`).
+- **Container Orchestration**: Azure Kubernetes Service (AKS `aks-catcar-prod`) with SKU Tier `Free`, 1–2 `Standard_B2s` nodes, Azure CNI with Cilium, Workload Identity, Microsoft Entra RBAC, and Container Insights.
+- **Container Registry**: Azure Container Registry Basic (`catcarprod<sub_suffix>`) configured with automated RBAC `AcrPull` bindings to AKS kubelet identity and `AcrPush` bindings to deploy identity.
+- **API Gateway**: Azure API Management (`apim-catcar-prod-<sub_suffix>`) with SKU `Consumption_0`, custom XML policies (`apim-policy.xml`), `X-CatCar-Gateway-Key` injection, and `rate-limit` policies routing public traffic to the AKS public IP FQDN backend and serverless Auth Function.
+- **Public IP**: Dedicated static Public IP (`pip-catcar-prod-api`) with DNS label (`catcar-api-prod-<sub_suffix>`) for AKS API LoadBalancer.
+- **Student Budget**: Subscription consumption budget (`catcar-student-budget`) aligned to credit expiration (`2028-08-31`) with action group notifications at 50%, 75%, 90%, 100% actual and 90% forecast.
+- **Observability & Alerting (`alerts/`)**: Log Analytics Workspace (`law-catcar-prod`), Application Insights (`appi-catcar-prod`), Action Groups, Scheduled Query Alert rules, Metric Alerts, and synthetic readiness uptime probes.
+
+---
 
 ## Dedicated Network & Kubernetes Architecture
 
 ```mermaid
 flowchart LR
-    Internet[Public clients] --> APIM[Azure API Management<br/>JWT policy and backend routing]
+    Internet[Public clients] --> APIM[Azure API Management Consumption_0<br/>JWT policy, rate limits & Gateway Key injection]
 
-    subgraph VNet["Azure VNet"]
-        APIMSubnet[snet-apim] --- APIM
-        AKSSubnet[snet-aks] --- AKS[AKS multi-AZ cluster]
-        PESubnet[snet-private-endpoints] --- PE[Private endpoints]
+    subgraph VNet["Azure VNet (vnet-catcar-prod)"]
+        AKSSubnet[snet-aks 10.20.1.0/24] --- AKS[AKS Free cluster 1-2 B2s nodes]
+        FnSubnet[snet-functions 10.20.3.0/27] --- Auth[Auth Function Flex Consumption]
     end
 
-    APIM -->|Protected API routes| AKS
-    APIM -->|CPF authentication| Auth[Serverless Auth backend]
-    HPA[HPA CPU/memory autoscaler<br/>2–10 replicas] --> AKS
-    ACR[Azure Container Registry] -->|AcrPull RBAC| AKS
+    PIP[Static Public IP<br/>catcar-api-prod-suffix] --- AKS
+    APIM -->|Protected API routes + Gateway Key| PIP
+    APIM -->|CPF authentication + Gateway Key| Auth
+    HPA[HPA CPU/memory autoscaler<br/>1–2 replicas @ 70%] --> AKS
+    ACR[Azure Container Registry Basic] -->|AcrPull RBAC| AKS
 
     AKS --> Monitor[Azure Monitor / Application Insights]
     Auth --> Monitor
     Monitor --> Alerts[Alerts and operational workbooks]
 ```
 
-Terraform establishes the network boundaries and Kubernetes control plane: a multi-availability-zone AKS cluster in `snet-aks`, APIM in `snet-apim`, private service connectivity in `snet-private-endpoints`, workload autoscaling from 2 to 10 replicas, ACR image pulls through RBAC, and centralized telemetry, alerts, and workbooks.
+---
 
-## APIM Routing & Postman Integration
+## APIM Routing & Ingress Policy
 
-APIM is the public routing boundary: it applies the JWT policy, routes `POST /api/auth/customer` to the serverless authentication backend, and routes protected platform APIs to AKS.
+APIM is the public routing boundary: it applies the JWT policy, injects `X-CatCar-Gateway-Key`, routes `POST /api/auth/customer` to the serverless authentication backend, and routes protected platform APIs to AKS.
 
-- **Swagger UI through the platform API:** [http://localhost:5000/swagger](http://localhost:5000/swagger)
-- **Scalar API Reference:** [http://localhost:5000/docs](http://localhost:5000/docs)
-- **OpenAPI v3 JSON:** [http://localhost:5000/openapi/v1.json](http://localhost:5000/openapi/v1.json)
+- **Platform Scalar API Reference:** [http://localhost:5000/docs](http://localhost:5000/docs)
 - **Versioned Postman collection:** [`CatCar_Platform.postman_collection.json`](https://github.com/RiseOn-CatCar/catcar-platform/blob/main/docs/postman/CatCar_Platform.postman_collection.json)
 - **Postman environment template:** [`CatCar_Platform.postman_environment.json`](https://github.com/RiseOn-CatCar/catcar-platform/blob/main/docs/postman/CatCar_Platform.postman_environment.json)
-
-Set `apimUrl` in the Postman environment to the APIM gateway URL to exercise the policy and backend routing; keep `baseUrl` pointed at the API host for direct local health checks.
 
 ---
 
@@ -54,17 +54,17 @@ Set `apimUrl` in the Postman environment to the APIM gateway URL to exercise the
 
 ```
 .
-├── main.tf                    # Core network, AKS, ACR, APIM resources
+├── main.tf                    # Core network, AKS, ACR, APIM, and Public IP resources
 ├── variables.tf               # Input parameters and defaults
-├── outputs.tf                 # Cluster and gateway outputs
-├── apim-policy.xml            # API Management global routing and JWT validation policy
+├── outputs.tf                 # Cluster, public IP, and gateway outputs
+├── apim-policy.xml            # API Management routing and JWT validation policy
 ├── alerts/
 │   └── catcar-alerts.tf       # Metric alerts, action groups, query rules, web tests
 ├── scripts/
 │   └── bootstrap-azure.sh     # Script to provision Azure control-plane and GitHub OIDC
 ├── docs/
 │   └── azure-bootstrap.md     # Step-by-step setup documentation
-└── .github/workflows/ci-cd.yml # Automated lint, validation, and multi-environment apply
+└── .github/workflows/ci-cd.yml # Automated lint, validation, and production tag apply
 ```
 
 ---
@@ -88,6 +88,5 @@ terraform validate
 
 ## CI/CD Pipeline
 
-- **Pull Requests**: Runs `terraform fmt` and `terraform validate` on both core and alerts modules.
-- **Push to `develop`**: Applies changes to **Homologation** environment with state keys `homolog-catcar-kubernetes.tfstate` and `homolog-catcar-alerts.tfstate`.
-- **Push to `main`**: Applies changes to **Production** environment with state keys `catcar-kubernetes.tfstate` and `catcar-alerts.tfstate`.
+- **Pull Requests / Pushes to `main`**: Runs `terraform fmt` and `terraform validate` on both core and alerts modules.
+- **Production Tag Push (`v*.*.*`)**: Applies changes to **Production** environment (`catcar-prod`) with state keys `catcar-kubernetes.tfstate` and `catcar-alerts.tfstate`.
