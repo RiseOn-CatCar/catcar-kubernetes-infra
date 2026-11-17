@@ -68,3 +68,52 @@ output "application_insights_name" {
   description = "Application Insights resource name."
   value       = azurerm_application_insights.this.name
 }
+
+output "api_management_gateway_url" {
+  value = azurerm_api_management.this.gateway_url
+}
+
+output "private_endpoints_subnet_id" {
+  value = azurerm_subnet.private_endpoints.id
+}
+
+output "api_private_ip" {
+  value = local.api_private_ip
+}
+
+output "communication_sender_address" {
+  value = "DoNotReply@${azurerm_email_communication_service_domain.this.from_sender_domain}"
+}
+
+output "communication_connection_string" {
+  value     = azurerm_communication_service.this.primary_connection_string
+  sensitive = true
+}
+
+output "auth_function_environment_id" {
+  value = azurerm_container_app_environment.auth.id
+}
+
+output "auth_function_environment_name" {
+  value = azurerm_container_app_environment.auth.name
+}
+
+output "auth_function_default_domain" {
+  value = azurerm_container_app_environment.auth.default_domain
+}
+
+output "auth_function_environment_static_ip" {
+  value = azurerm_container_app_environment.auth.static_ip_address
+}
+
+output "auth_function_subnet_id" {
+  value = azurerm_subnet.auth.id
+}
+
+output "auth_function_container_app_name" {
+  value = local.auth_function_container_app_name
+}
+
+output "auth_function_backend_url" {
+  value = local.auth_function_backend_url
+}

@@ -18,11 +18,14 @@ data "azurerm_client_config" "current" {}
 
 
 locals {
-  name_prefix = "${var.application_name}-${var.environment}"
-  acr_name    = substr(lower(replace("${var.application_name}${var.environment}", "/[^0-9a-z]/", "")), 0, 50)
+  name_prefix                      = var.application_name
+  acr_name                         = coalesce(var.acr_name, "${substr(lower(replace(var.application_name, "/[^0-9a-z]/", "")), 0, 42)}${substr(sha256("${data.azurerm_client_config.current.subscription_id}:${var.application_name}"), 0, 8)}")
+  api_private_ip                   = coalesce(var.api_private_ip, cidrhost(var.aks_subnet_prefix, -6))
+  auth_function_container_app_name = coalesce(var.auth_function_container_app_name, "${var.application_name}-auth-function")
+  auth_function_backend_url        = "https://${local.auth_function_container_app_name}.${azurerm_container_app_environment.auth.default_domain}"
   tags = merge(var.tags, {
     application = var.application_name
-    environment = var.environment
+    environment = "azure"
     managed_by  = "terraform"
   })
 }
@@ -34,7 +37,7 @@ resource "azurerm_resource_group" "this" {
 }
 
 resource "azurerm_virtual_network" "this" {
-  name                = "vnet-${local.name_prefix}"
+  name                = coalesce(var.vnet_name, "vnet-${local.name_prefix}")
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   address_space       = [var.vnet_address_space]
@@ -129,7 +132,7 @@ resource "azurerm_container_registry" "this" {
   location                      = azurerm_resource_group.this.location
   sku                           = "Premium"
   admin_enabled                 = false
-  public_network_access_enabled = false
+  public_network_access_enabled = true
   zone_redundancy_enabled       = var.zone_redundancy_enabled
   tags                          = local.tags
 }
@@ -157,7 +160,7 @@ resource "azurerm_private_endpoint" "acr" {
 }
 
 resource "azurerm_log_analytics_workspace" "this" {
-  name                = "law-${local.name_prefix}"
+  name                = coalesce(var.log_analytics_workspace_name, "law-${local.name_prefix}")
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   sku                 = "PerGB2018"
@@ -180,12 +183,12 @@ resource "azurerm_application_insights_workbook" "catcar_dashboard" {
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   display_name        = "CatCar Operations Dashboard"
-  data_json           = replace(file("${path.module}/workbooks/catcar-dashboard.json"), "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.insights/components/appi-catcar-prod", azurerm_application_insights.this.id)
+  data_json           = replace(file("${path.module}/workbooks/catcar-dashboard.json"), "__WORKSPACE_ID__", azurerm_log_analytics_workspace.this.id)
   tags                = local.tags
 }
 
 resource "azurerm_kubernetes_cluster" "this" {
-  name                = "aks-${local.name_prefix}"
+  name                = coalesce(var.aks_cluster_name, "aks-${local.name_prefix}")
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   dns_prefix          = local.name_prefix
@@ -284,7 +287,7 @@ resource "azurerm_api_management_api" "catcar" {
   revision            = "1"
   display_name        = "CatCar API"
   path                = "api"
-  service_url         = var.api_backend_url
+  service_url         = "http://catcar-api.catcar.internal"
   protocols           = ["https"]
 }
 
@@ -293,7 +296,7 @@ resource "azurerm_api_management_backend" "catcar" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   protocol            = "http"
-  url                 = var.api_backend_url
+  url                 = "http://catcar-api.catcar.internal"
 }
 
 resource "azurerm_api_management_backend" "auth_function" {
@@ -301,7 +304,7 @@ resource "azurerm_api_management_backend" "auth_function" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   protocol            = "http"
-  url                 = var.auth_function_backend_url
+  url                 = local.auth_function_backend_url
 }
 
 locals {
@@ -460,5 +463,118 @@ resource "azurerm_api_management_api_policy" "catcar" {
   resource_group_name = azurerm_resource_group.this.name
   api_management_name = azurerm_api_management.this.name
   xml_content         = file("${path.module}/apim-policy.xml")
-  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_named_value.admin_jwt_secret, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
+  depends_on          = [azurerm_api_management_named_value.customer_jwt_signing_key, azurerm_api_management_named_value.admin_jwt_secret, azurerm_api_management_named_value.work_order_mutations_paused, azurerm_api_management_backend.catcar, azurerm_api_management_backend.auth_function]
+}
+
+resource "azurerm_api_management_named_value" "work_order_mutations_paused" {
+  name                = "catcar-work-order-mutations-paused"
+  display_name        = "catcar-work-order-mutations-paused"
+  resource_group_name = azurerm_resource_group.this.name
+  api_management_name = azurerm_api_management.this.name
+  value               = "false"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "azurerm_role_assignment" "aks_network_contributor" {
+  scope                = azurerm_virtual_network.this.id
+  role_definition_name = "Network Contributor"
+  principal_id         = azurerm_kubernetes_cluster.this.identity[0].principal_id
+}
+
+resource "azurerm_private_dns_zone" "api" {
+  name                = "catcar.internal"
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "api" {
+  name                  = "pdnslink-api-${local.name_prefix}"
+  resource_group_name   = azurerm_resource_group.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.api.name
+  virtual_network_id    = azurerm_virtual_network.this.id
+}
+
+resource "azurerm_private_dns_a_record" "api" {
+  name                = "catcar-api"
+  zone_name           = azurerm_private_dns_zone.api.name
+  resource_group_name = azurerm_resource_group.this.name
+  ttl                 = 60
+  records             = [local.api_private_ip]
+}
+
+resource "azurerm_subnet" "auth" {
+  name                 = "snet-auth-functions"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.auth_function_subnet_prefix]
+  delegation {
+    name = "container-app-environments"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+resource "azurerm_container_app_environment" "auth" {
+  name                           = "cae-auth-${local.name_prefix}"
+  location                       = azurerm_resource_group.this.location
+  resource_group_name            = azurerm_resource_group.this.name
+  log_analytics_workspace_id     = azurerm_log_analytics_workspace.this.id
+  infrastructure_subnet_id       = azurerm_subnet.auth.id
+  internal_load_balancer_enabled = true
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
+  tags = local.tags
+}
+
+resource "azurerm_private_dns_zone" "auth" {
+  name                = azurerm_container_app_environment.auth.default_domain
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "auth" {
+  name                  = "pdnslink-auth-${local.name_prefix}"
+  resource_group_name   = azurerm_resource_group.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.auth.name
+  virtual_network_id    = azurerm_virtual_network.this.id
+}
+
+resource "azurerm_private_dns_a_record" "auth" {
+  name                = "*"
+  zone_name           = azurerm_private_dns_zone.auth.name
+  resource_group_name = azurerm_resource_group.this.name
+  ttl                 = 60
+  records             = [azurerm_container_app_environment.auth.static_ip_address]
+}
+
+resource "azurerm_communication_service" "this" {
+  name                = "acs-${local.name_prefix}"
+  resource_group_name = azurerm_resource_group.this.name
+  data_location       = "United States"
+  tags                = local.tags
+}
+
+resource "azurerm_email_communication_service" "this" {
+  name                = "email-${local.name_prefix}"
+  resource_group_name = azurerm_resource_group.this.name
+  data_location       = "United States"
+  tags                = local.tags
+}
+
+resource "azurerm_email_communication_service_domain" "this" {
+  name              = "AzureManagedDomain"
+  email_service_id  = azurerm_email_communication_service.this.id
+  domain_management = "AzureManaged"
+  tags              = local.tags
+}
+
+resource "azurerm_communication_service_email_domain_association" "this" {
+  communication_service_id = azurerm_communication_service.this.id
+  email_service_domain_id  = azurerm_email_communication_service_domain.this.id
 }

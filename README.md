@@ -6,11 +6,19 @@ Terraform Infrastructure as Code (IaC) repository provisioning core networking, 
 
 ## Provisioned Infrastructure
 
-- **Networking**: Azure Virtual Network (`vnet-catcar-*`) with subnets for AKS (`snet-aks`), API Management (`snet-apim`), and Private Endpoints (`snet-private-endpoints`).
+- **Networking**: Azure Virtual Network (`vnet-catcar`) with subnets for AKS (`snet-aks`), API Management (`snet-apim`), and Private Endpoints (`snet-private-endpoints`).
 - **Container Orchestration**: Azure Kubernetes Service (AKS) with Azure CNI, Workload Identity, Microsoft Entra RBAC, and Container Insights.
 - **Container Registry**: Azure Container Registry (ACR) configured with automated RBAC `AcrPull` bindings to AKS kubelet identity.
 - **API Gateway**: Azure API Management (APIM) with custom XML policies (`apim-policy.xml`) routing public traffic to AKS backend and serverless Auth Function.
 - **Observability & Alerting (`alerts/`)**: Log Analytics Workspace, Application Insights, Action Groups, Scheduled Query Alert rules, Metric Alerts (CPU, Memory, Latency > 2s), and synthetic readiness uptime probes.
+
+The foundation also provisions a private Container Apps environment and DNS for the customer authentication workload, private DNS for the AKS API load balancer, and an Azure-managed Communication Services email domain. The Function itself belongs to the auth infrastructure state. ACR permits authenticated public access for hosted CI runners; admin credentials remain disabled and private endpoints remain available.
+
+Before applying, inspect the existing foundation state and Azure resources and import any existing equivalent resources rather than creating duplicates. Confirm the auth subnet does not overlap existing subnets and choose a free `auth_function_subnet_prefix`; the default follows this root's existing `10.20.0.0/16` defaults and is not evidence of availability. Confirm `api_private_ip` is free in the AKS subnet; its derived default must not be used without that check. Set name override inputs for existing VNet, AKS, ACR, workspace or auth app names that differ from the derived names. Import any existing equivalent AKS Network Contributor role assignment before applying.
+
+The API backend uses `catcar-api.catcar.internal`; its private DNS record must match the internal AKS Service address. APIM's `catcar-work-order-mutations-paused` named value blocks mutations under `/api/v1` except the exact admin login route. Set it to `true` before draining; keep it enabled on failure, and release it only after reconciliation and health checks. Terraform deliberately ignores subsequent changes to this value, so foundation refresh and apply preserve an active pause.
+
+The platform's `azure` GitHub environment supplies `AZURE_TF_STATE_RG`, `AZURE_TF_STATE_STORAGE_ACCOUNT`, and `TF_BACKEND_CONTAINER`. Verify backend coordinates and resource identities before deploying. Terraform state contains secrets and must not be published. Communication connection string is a sensitive output. The release derives the alert `health_probe_url` from the APIM gateway URL plus `/api/health/ready`.
 
 ## Dedicated Network & Kubernetes Architecture
 
@@ -60,12 +68,10 @@ Set `apimUrl` in the Postman environment to the APIM gateway URL to exercise the
 ├── apim-policy.xml            # API Management global routing and JWT validation policy
 ├── alerts/
 │   └── catcar-alerts.tf       # Metric alerts, action groups, query rules, web tests
-├── scripts/
-│   └── bootstrap-azure.sh     # Script to provision Azure control-plane and GitHub OIDC
-├── docs/
-│   └── azure-bootstrap.md     # Step-by-step setup documentation
-└── .github/workflows/ci-cd.yml # Automated lint, validation, and multi-environment apply
+└── .github/workflows/ci-cd.yml # Automated format and validation checks
 ```
+
+Azure control-plane setup uses the [central bootstrap runbook](https://github.com/RiseOn-CatCar/catcar-platform/blob/main/docs/azure-bootstrap.md).
 
 ---
 
@@ -86,8 +92,6 @@ terraform validate
 
 ---
 
-## CI/CD Pipeline
+## CI and Release
 
-- **Pull Requests**: Runs `terraform fmt` and `terraform validate` on both core and alerts modules.
-- **Push to `develop`**: Applies changes to **Homologation** environment with state keys `homolog-catcar-kubernetes.tfstate` and `homolog-catcar-alerts.tfstate`.
-- **Push to `main`**: Applies changes to **Production** environment with state keys `catcar-kubernetes.tfstate` and `catcar-alerts.tfstate`.
+Pull requests and pushes to `main` or `release/**`, and manual dispatches, validate both Terraform roots. Only a strict version tag in the platform repository initiates the coordinated Azure release. The foundation and alerts states use `catcar-kubernetes.tfstate` and `catcar-alerts.tfstate`; component workflows do not deploy.

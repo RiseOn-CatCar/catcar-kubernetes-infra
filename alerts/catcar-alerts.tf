@@ -40,7 +40,7 @@ variable "log_analytics_workspace_id" {
 }
 
 variable "health_probe_url" {
-  description = "Public HTTPS endpoint for the CatCar readiness probe."
+  description = "Public readiness endpoint: foundation api_management_gateway_url followed by /api/health/ready."
   type        = string
 }
 
@@ -66,7 +66,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "os_processing_failure
   resource_group_name = var.resource_group_name
   location            = var.location
   scopes              = [var.log_analytics_workspace_id]
-  description         = "Triggers when processing a work order records an error."
+  description         = "Triggers when a work-order integration failure is recorded."
   severity            = 1
   enabled             = true
 
@@ -74,7 +74,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "os_processing_failure
   window_duration      = "PT15M"
 
   criteria {
-    query                   = "AppTraces | where Message has 'WorkOrder' and SeverityLevel >= 3 | summarize FailureCount = count()"
+    query                   = "AppTraces | where tostring(Properties.EventName) == 'WorkOrderIntegrationFailed' and SeverityLevel >= 3 | summarize FailureCount = count()"
     time_aggregation_method = "Total"
     threshold               = 0
     operator                = "GreaterThan"
