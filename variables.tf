@@ -4,22 +4,16 @@ variable "application_name" {
   default     = "catcar"
 }
 
-variable "environment" {
-  description = "Deployment environment."
-  type        = string
-  default     = "prod"
-}
-
 variable "location" {
   description = "Azure region for all resources."
   type        = string
-  default     = "eastus2"
+  default     = "brazilsouth"
 }
 
 variable "resource_group_name" {
   description = "Resource group for CatCar Kubernetes and platform infrastructure."
   type        = string
-  default     = "CatCar"
+  default     = "rg-catcar"
 }
 
 variable "vnet_address_space" {
@@ -41,7 +35,7 @@ variable "apim_subnet_prefix" {
 }
 
 variable "aks_sku_tier" {
-  description = "SKU Tier for the AKS cluster ('Free' for dev/test/homolog or 'Standard' for SLA-backed production)."
+  description = "SKU tier for the AKS cluster: Free or Standard."
   type        = string
   default     = "Standard"
 }
@@ -126,20 +120,56 @@ variable "admin_jwt_secret" {
   }
 }
 
-variable "api_backend_url" {
-  description = "APIM-reachable internal load balancer URL for the CatCar API."
-  type        = string
-  default     = "http://catcar-api.catcar.internal"
-}
 
-variable "auth_function_backend_url" {
-  description = "Private URL for the customer authentication function backend."
-  type        = string
-  default     = "https://auth-function.internal.catcar.local"
-}
 
 variable "tags" {
   description = "Additional tags applied to managed Azure resources."
   type        = map(string)
   default     = {}
+}
+
+variable "vnet_name" {
+  description = "Existing VNet name to adopt, if different from the derived name."
+  type        = string
+  default     = null
+}
+
+variable "aks_cluster_name" {
+  description = "Existing AKS name to adopt, if different from the derived name."
+  type        = string
+  default     = null
+}
+
+variable "acr_name" {
+  description = "Existing ACR name to adopt, if different from the derived name."
+  type        = string
+  default     = null
+}
+
+variable "log_analytics_workspace_name" {
+  description = "Existing workspace name to adopt, if different from the derived name."
+  type        = string
+  default     = null
+}
+
+variable "api_private_ip" {
+  description = "Existing or preflight-confirmed free AKS internal load balancer IPv4 address."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.api_private_ip == null ? true : can(cidrhost("${var.api_private_ip}/32", 0))
+    error_message = "api_private_ip must be an IPv4 address."
+  }
+}
+
+variable "auth_function_subnet_prefix" {
+  description = "Preflight-confirmed free /27 subnet for the internal ACA environment."
+  type        = string
+  default     = "10.20.8.0/27"
+}
+
+variable "auth_function_container_app_name" {
+  description = "Existing auth Container App name to adopt, if different from the derived name."
+  type        = string
+  default     = null
 }
