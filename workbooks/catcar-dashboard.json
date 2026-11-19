@@ -14,7 +14,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Daily Work Order Volume",
-        "query": "AppTraces\n| where tostring(Properties.EventName) == 'WorkOrderOpened'\n| extend EventId = tostring(Properties.EventId)\n| where isnotempty(EventId)\n| summarize FirstSeen = min(TimeGenerated) by EventId\n| summarize WorkOrdersCreated = count() by Day = bin(FirstSeen, 1d)\n| order by Day asc",
+        "query": "AppTraces\n| where tostring(Properties.EventName) == 'WorkOrderOpened'\n| extend WorkOrderId = tostring(Properties.WorkOrderId)\n| where isnotempty(WorkOrderId)\n| summarize FirstSeen = min(TimeGenerated) by WorkOrderId\n| summarize WorkOrdersCreated = count() by Day = bin(FirstSeen, 1d)\n| order by Day asc",
         "size": 0,
         "timeContext": {
           "durationMs": 2592000000
