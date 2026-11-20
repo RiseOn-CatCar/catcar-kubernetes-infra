@@ -8,11 +8,19 @@ Terraform Infrastructure as Code (IaC) repository provisioning core networking, 
 
 - **Networking**: Azure Virtual Network (`vnet-catcar`) with subnets for AKS (`snet-aks`), API Management (`snet-apim`), and Private Endpoints (`snet-private-endpoints`).
 - **Container Orchestration**: Azure Kubernetes Service (AKS) with Azure CNI, Workload Identity, Microsoft Entra RBAC, and Container Insights.
-- **Container Registry**: Azure Container Registry (ACR) configured with automated RBAC `AcrPull` bindings to AKS kubelet identity.
+- **Container Registry**: ACR Basic with authenticated public network access and `AcrPull` bindings to the AKS kubelet identity; admin credentials are disabled.
 - **API Gateway**: Azure API Management (APIM) with custom XML policies (`apim-policy.xml`) routing public traffic to AKS backend and serverless Auth Function.
 - **Observability & Alerting (`alerts/`)**: Log Analytics Workspace, Application Insights, Action Groups, Scheduled Query Alert rules, Metric Alerts (CPU, Memory, Latency > 2s), and synthetic readiness uptime probes.
 
-The foundation also provisions a private Container Apps environment and DNS for the customer authentication workload, private DNS for the AKS API load balancer, and an Azure-managed Communication Services email domain. The Function itself belongs to the auth infrastructure state. ACR permits authenticated public access for hosted CI runners; admin credentials remain disabled and private endpoints remain available.
+The foundation also provisions a private Container Apps environment and DNS for the customer authentication workload, private DNS for the AKS API load balancer, and an Azure-managed Communication Services email domain. The Function itself belongs to the auth infrastructure state.
+
+## Perfil de custo acadêmico
+
+- AKS usa plano de controle Free; dois nós `Standard_D4as_v4`, discos gerenciados, balanceador Standard e IP público são cobrados: o custo de computação não é gratuito e pode ser significativo. O pool de sistema precisa de pelo menos dois nós e VMs de pelo menos 4 vCPUs; VMs B-series não são suportadas nesse pool. A cota regional e de família deve ser conferida antes do deploy; upgrades podem exigir nós adicionais e mais cota.
+- ACR Basic usa acesso público autenticado; endpoints privados exigem Premium. A subnet de endpoints privados é mantida como reserva, sem endpoint criado pela configuração atual.
+- Log Analytics mantém 30 dias e limite de ingestão de 0,15 GB/dia (`daily_quota_gb`); ao atingir o limite, dados e alertas podem ser perdidos. Container Insights permanece para diagnóstico. Application Insights usa o workspace.
+- APIM Developer e o ambiente interno de Container Apps com perfil Consumption permanecem; execução, rede, DNS, telemetria, alertas e testes de disponibilidade podem gerar cobranças. O teste usa uma localização a cada 15 minutos, reduzindo cobertura e custo.
+- A disponibilidade de SKU, zonas e capacidade deve ser confirmada na assinatura e região antes da implantação; zonas não são configuradas por padrão.
 
 Before applying, inspect the existing foundation state and Azure resources and import any existing equivalent resources rather than creating duplicates. Confirm the auth subnet does not overlap existing subnets and choose a free `auth_function_subnet_prefix`; the default follows this root's existing `10.20.0.0/16` defaults and is not evidence of availability. Confirm `api_private_ip` is free in the AKS subnet; its derived default must not be used without that check. Set name override inputs for existing VNet, AKS, ACR, workspace or auth app names that differ from the derived names. Import any existing equivalent AKS Network Contributor role assignment before applying.
 
@@ -28,8 +36,8 @@ flowchart LR
 
     subgraph VNet["Azure VNet"]
         APIMSubnet[snet-apim] --- APIM
-        AKSSubnet[snet-aks] --- AKS[AKS multi-AZ cluster]
-        PESubnet[snet-private-endpoints] --- PE[Private endpoints]
+        AKSSubnet[snet-aks] --- AKS[AKS cluster]
+        PESubnet[snet-private-endpoints reservado]
     end
 
     APIM -->|Protected API routes| AKS
@@ -42,7 +50,7 @@ flowchart LR
     Monitor --> Alerts[Alerts and operational workbooks]
 ```
 
-Terraform establishes the network boundaries and Kubernetes control plane: a multi-availability-zone AKS cluster in `snet-aks`, APIM in `snet-apim`, private service connectivity in `snet-private-endpoints`, workload autoscaling from 2 to 10 replicas, ACR image pulls through RBAC, and centralized telemetry, alerts, and workbooks.
+Terraform establishes the network boundaries and Kubernetes control plane: an AKS cluster in `snet-aks`, APIM in `snet-apim`, private service connectivity in `snet-private-endpoints`, workload autoscaling from 2 to 10 replicas, ACR image pulls through RBAC, and centralized telemetry, alerts, and workbooks.
 
 ## APIM Routing & Postman Integration
 

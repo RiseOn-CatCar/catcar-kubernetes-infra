@@ -49,6 +49,21 @@ variable "alert_email" {
   type        = string
 }
 
+variable "web_test_frequency_seconds" {
+  description = "Standard availability test frequency in seconds."
+  type        = number
+  default     = 900
+}
+
+variable "web_test_locations" {
+  description = "Availability test locations; one location reduces test executions."
+  type        = list(string)
+  default     = ["us-ca-sjc-azr"]
+}
+
+# Each distinct signal incurs its own rule cost; all five cover required,
+# non-redundant failure modes and are retained.
+
 resource "azurerm_monitor_action_group" "catcar" {
   name                = "ag-catcar-operations"
   resource_group_name = var.resource_group_name
@@ -161,8 +176,8 @@ resource "azurerm_application_insights_standard_web_test" "uptime" {
   resource_group_name     = var.resource_group_name
   location                = var.location
   application_insights_id = var.application_insights_id
-  geo_locations           = ["us-ca-sjc-azr", "us-va-ash-azr"]
-  frequency               = 300
+  geo_locations           = var.web_test_locations
+  frequency               = var.web_test_frequency_seconds
   timeout                 = 30
   enabled                 = true
   retry_enabled           = true
