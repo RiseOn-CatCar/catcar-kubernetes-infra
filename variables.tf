@@ -35,15 +35,21 @@ variable "apim_subnet_prefix" {
 }
 
 variable "aks_sku_tier" {
-  description = "SKU tier for the AKS cluster: Free or Standard."
+  description = "AKS control-plane tier; Free avoids the Standard management charge."
   type        = string
-  default     = "Standard"
+  default     = "Free"
 }
 
 variable "aks_vm_size" {
-  description = "VM size for the AKS system node pool."
+  description = "System pool VM size; B-series VMs are not supported for system pools."
   type        = string
-  default     = "Standard_D2ads_v6"
+  default     = "Standard_D4as_v4"
+}
+
+variable "aks_os_disk_size_gb" {
+  description = "Managed OS disk size in GiB per AKS system node."
+  type        = number
+  default     = 32
 }
 
 variable "aks_min_node_count" {
@@ -55,7 +61,7 @@ variable "aks_min_node_count" {
 variable "aks_max_node_count" {
   description = "Maximum node count for the AKS system pool."
   type        = number
-  default     = 6
+  default     = 2
 }
 
 variable "private_endpoints_subnet_prefix" {
@@ -65,21 +71,33 @@ variable "private_endpoints_subnet_prefix" {
 }
 
 variable "availability_zones" {
-  description = "Availability zones assigned to the AKS system pool when supported by the selected region."
+  description = "AKS system pool zones; empty selects no zones. Use consistent supported zones when scaling."
   type        = list(string)
   default     = []
 }
 
+variable "acr_sku" {
+  description = "ACR SKU; Premium is required for private endpoints and zone redundancy."
+  type        = string
+  default     = "Basic"
+}
+
 variable "zone_redundancy_enabled" {
-  description = "Whether Premium ACR is zone redundant."
+  description = "Enable ACR zone redundancy only with Premium."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "log_retention_days" {
   description = "Log Analytics and Application Insights retention period."
   type        = number
   default     = 30
+}
+
+variable "daily_quota_gb" {
+  description = "Daily Log Analytics ingestion cap in GB; reaching it can interrupt telemetry and alerts."
+  type        = number
+  default     = 0.15
 }
 
 variable "apim_publisher_name" {

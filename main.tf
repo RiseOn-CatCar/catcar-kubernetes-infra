@@ -113,51 +113,19 @@ resource "azurerm_subnet" "private_endpoints" {
   address_prefixes     = [var.private_endpoints_subnet_prefix]
 }
 
-resource "azurerm_private_dns_zone" "acr" {
-  name                = "privatelink.azurecr.io"
-  resource_group_name = azurerm_resource_group.this.name
-  tags                = local.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "acr" {
-  name                  = "pdnslink-acr-${local.name_prefix}"
-  private_dns_zone_name = azurerm_private_dns_zone.acr.name
-  virtual_network_id    = azurerm_virtual_network.this.id
-  resource_group_name   = azurerm_resource_group.this.name
-}
 
 resource "azurerm_container_registry" "this" {
-  name                          = local.acr_name
-  resource_group_name           = azurerm_resource_group.this.name
-  location                      = azurerm_resource_group.this.location
-  sku                           = "Premium"
+  name                = local.acr_name
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  # Private endpoints require Premium; this registry uses authenticated public access.
+  sku                           = var.acr_sku
   admin_enabled                 = false
   public_network_access_enabled = true
   zone_redundancy_enabled       = var.zone_redundancy_enabled
   tags                          = local.tags
 }
 
-resource "azurerm_private_endpoint" "acr" {
-  name                = "pe-acr-${local.name_prefix}"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
-  subnet_id           = azurerm_subnet.private_endpoints.id
-  tags                = local.tags
-
-  private_service_connection {
-    name                           = "psc-acr-${local.name_prefix}"
-    private_connection_resource_id = azurerm_container_registry.this.id
-    subresource_names              = ["registry"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "acr-private-dns"
-    private_dns_zone_ids = [azurerm_private_dns_zone.acr.id]
-  }
-
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.acr]
-}
 
 resource "azurerm_log_analytics_workspace" "this" {
   name                = coalesce(var.log_analytics_workspace_name, "law-${local.name_prefix}")
@@ -165,6 +133,7 @@ resource "azurerm_log_analytics_workspace" "this" {
   resource_group_name = azurerm_resource_group.this.name
   sku                 = "PerGB2018"
   retention_in_days   = var.log_retention_days
+  daily_quota_gb      = var.daily_quota_gb
   tags                = local.tags
 }
 
@@ -198,6 +167,8 @@ resource "azurerm_kubernetes_cluster" "this" {
     name                 = "system"
     vm_size              = var.aks_vm_size
     vnet_subnet_id       = azurerm_subnet.aks.id
+    os_disk_size_gb      = var.aks_os_disk_size_gb
+    os_disk_type         = "Managed"
     auto_scaling_enabled = true
     min_count            = var.aks_min_node_count
     max_count            = var.aks_max_node_count
@@ -216,6 +187,7 @@ resource "azurerm_kubernetes_cluster" "this" {
     load_balancer_sku  = "standard"
   }
 
+  # Container Insights supports cluster diagnostics; workspace ingestion is capped.
   oms_agent {
     log_analytics_workspace_id      = azurerm_log_analytics_workspace.this.id
     msi_auth_for_monitoring_enabled = true
@@ -525,6 +497,7 @@ resource "azurerm_container_app_environment" "auth" {
   log_analytics_workspace_id     = azurerm_log_analytics_workspace.this.id
   infrastructure_subnet_id       = azurerm_subnet.auth.id
   internal_load_balancer_enabled = true
+  # Consumption only: no dedicated paid workload profile is provisioned.
   workload_profile {
     name                  = "Consumption"
     workload_profile_type = "Consumption"
